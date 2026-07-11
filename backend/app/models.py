@@ -78,18 +78,9 @@ class ConnectVerifyReq(BaseModel):
 
 class PayReq(BaseModel):
     method: Literal["upi"] = "upi"
-    upi_app: Literal["gpay", "phonepe", "paytm", "bhim"] = "gpay"
-    upi_id: str | None = None
-
-
-class MandateReq(BaseModel):
-    mobile: str
-    cap_inr: int = 5000
-
-
-class PreauthReq(BaseModel):
-    product: str
-    max_price_inr: int
+    upi_app: str = "upi"                # which UPI app the user paid from (label only)
+    upi_id: str | None = None           # optional payer VPA (if entered manually)
+    upi_txn_id: str | None = None       # txn id returned by the UPI app, if any
 
 
 class VisualizeReq(BaseModel):

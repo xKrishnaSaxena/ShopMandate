@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Headphones
@@ -97,7 +98,15 @@ fun ComparingScreen(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(24.dp))
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Brand,
+                modifier = Modifier.size(24.dp).clickable { onBack() },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
         Icon(Icons.Filled.Sync, contentDescription = null, tint = Brand, modifier = Modifier.size(28.dp))
         Spacer(Modifier.height(12.dp))
         Text(

@@ -9,8 +9,8 @@ import asyncio
 import uuid
 from dataclasses import dataclass
 
-from . import connect, gemini, negotiation, p3p, payment
-from .merchants import registry
+from . import connect, gemini, negotiation, payment
+from .merchants import ordering, registry
 from .models import (
     ClarifyReq,
     Intent,
@@ -27,8 +27,6 @@ class Session:
     intent: Intent | None = None
     decision: Decision | None = None
     connected: bool = False
-    mobile: str | None = None            # set once a P3P mandate is approved
-    preauth: dict | None = None          # {"product": str, "max_price_inr": int}
 
 
 SESSIONS: dict[str, Session] = {}
@@ -91,11 +89,11 @@ def clarify(session_id: str, req: ClarifyReq) -> dict:
         except (TypeError, ValueError):
             pass
     if "type" in a and a["type"]:
+        # `type` is a variant constraint (e.g. "Wireless"), never the product itself —
+        # don't fabricate a product from it. The product comes from what the user asked.
         t = str(a["type"])
         if t not in i.constraints:
             i.constraints.append(t)
-        if not i.product:
-            i.product = f"{t} earbuds" if "wire" in t else t
     for k, v in a.items():
         if k in ("qty",) and v is not None:
             try:
@@ -107,8 +105,10 @@ def clarify(session_id: str, req: ClarifyReq) -> dict:
     return {"status": "intent_ready", "parsed_intent": _intent_public(i)}
 
 
-async def _gather_quotes(intent: Intent) -> list[Quote]:
-    query = (intent.product or "").strip() or "wireless earbuds"
+async def _gather_quotes(intent: Intent, only: set[str] | None = None) -> list[Quote]:
+    query = (intent.product or "").strip()
+    if not query:
+        return []  # no product yet — nothing to search (don't fabricate a query)
 
     async def one(m) -> Quote | None:
         try:
@@ -117,7 +117,10 @@ async def _gather_quotes(intent: Intent) -> list[Quote]:
             print(f"[merchant {m.id}] search failed: {e}")
             return None
 
-    results = await asyncio.gather(*(one(m) for m in registry.MERCHANTS))
+    # `only` locks the search to a single store once the user has committed to one
+    # (multi-item cart must ship from one merchant). None = compare all stores.
+    merchants = [m for m in registry.MERCHANTS if only is None or m.id in only]
+    results = await asyncio.gather(*(one(m) for m in merchants))
     return [q for q in results if q is not None]
 
 
@@ -132,6 +135,129 @@ async def connect_merchant(mid: str) -> dict:
         return {"status": "unknown_or_mock", "id": mid}
     ok = await m.connect()  # type: ignore[attr-defined]
     return {"status": "connected" if ok else "failed", "id": mid, "name": m.name}
+
+
+async def _real_connected(mid: str):
+    m = registry.by_id(mid)
+    if m is None or not getattr(m, "real", False):
+        return None, {"status": "unknown_or_mock", "id": mid}
+    if not m.connected():
+        return None, {"status": "not_connected", "id": mid}
+    return m, None
+
+
+async def order_prepare(mid: str, query: str, budget_inr: int | None, qty: int,
+                        address_id: str | None) -> dict:
+    """Real cart build + order preview on a merchant (no charge). Returns amount to pay."""
+    m, err = await _real_connected(mid)
+    if err:
+        return err
+    try:
+        return await ordering.prepare(m, query, budget_inr, qty, address_id)
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+async def order_prepare_cart(mid: str, items: list[dict], address_id: str | None) -> dict:
+    """Multi-item cart preview on one merchant (Live voice cart). `items`: [{query, budget_inr?, qty?}]."""
+    m, err = await _real_connected(mid)
+    if err:
+        return err
+    if not items:
+        return {"status": "no_product"}
+    try:
+        return await ordering.prepare_cart(m, items, address_id)
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+async def merchant_addresses(mid: str) -> dict:
+    """Saved delivery addresses for a connected merchant (for the pre-order address picker)."""
+    m, err = await _real_connected(mid)
+    if err:
+        return err
+    try:
+        return {"status": "ok", "id": mid, "name": m.name, "addresses": await ordering.list_addresses(m)}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+async def order_confirm(mid: str, address_id: str, rail: str = "online",
+                        intent_app: str = "gpay://upi/", meta: dict | None = None) -> dict:
+    """Places the REAL order (charges via the merchant's payment flow). Returns pay reference.
+
+    `meta` is the breakdown from order/prepare (product, item/delivery/total, address) so the
+    order history keeps the full, transparent record of what was paid and where it ships.
+    """
+    from datetime import date
+    m, err = await _real_connected(mid)
+    if err:
+        return err
+    try:
+        res = await ordering.confirm(m, address_id, rail=rail, intent_app=intent_app)
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+    # Record locally for order history once placed (with the full transparent breakdown).
+    if res.get("status") == "placed" and res.get("order_id"):
+        meta = meta or {}
+        addr = meta.get("address") or {}
+        _ORDERS.append({
+            "product": meta.get("product") or res.get("product", "Order"),
+            "store": res.get("store", m.name),
+            "qty": meta.get("qty", 1),
+            "item_price_inr": meta.get("item_price_inr"),
+            "delivery_fee_inr": meta.get("delivery_fee_inr"),
+            "price_inr": meta.get("to_pay_inr", 0),           # total paid
+            "address_label": addr.get("label"),
+            "address_line": addr.get("line"),
+            "order_id": str(res["order_id"]),
+            "date": date.today().isoformat(),
+            "status": "placed", "delivered": False,
+        })
+    return res
+
+
+async def order_status(mid: str, order_id: str) -> dict:
+    """Poll merchant payment/order status (after the payment link is paid)."""
+    m, err = await _real_connected(mid)
+    if err:
+        return err
+    if not order_id:
+        return {"status": "error", "detail": "order_id required"}
+    try:
+        return {"status": "ok", **await ordering.payment_status(m, order_id)}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+async def merchant_call(mid: str, tool: str, args: dict | None) -> dict:
+    """DEV-ONLY passthrough: call any MCP tool on a connected merchant and return the raw
+    result. Used to observe real response shapes while building the order pipeline."""
+    m = registry.by_id(mid)
+    if m is None or not getattr(m, "real", False):
+        return {"status": "unknown_or_mock", "id": mid}
+    if not m.connected():
+        return {"status": "not_connected", "id": mid}
+    try:
+        result = await m.mcp.call(tool, args or {})  # type: ignore[attr-defined]
+    except Exception as e:
+        return {"status": "error", "tool": tool, "detail": str(e)}
+    return {"status": "ok", "tool": tool, "result": result}
+
+
+async def merchant_tools(mid: str) -> dict:
+    """Discovery: dump a connected merchant's full tool list (names + input schemas)
+    so we can wire the real add-to-cart → checkout → place-order → pay pipeline."""
+    m = registry.by_id(mid)
+    if m is None or not getattr(m, "real", False):
+        return {"status": "unknown_or_mock", "id": mid}
+    if not m.connected():
+        return {"status": "not_connected", "id": mid, "name": m.name}
+    try:
+        defs = await m.tool_defs()  # type: ignore[attr-defined]
+    except Exception as e:
+        return {"status": "error", "id": mid, "detail": str(e)}
+    return {"status": "ok", "id": mid, "name": m.name, "count": len(defs), "tools": defs}
 
 
 def _decision_from_dict(d: dict) -> Decision:
@@ -206,6 +332,50 @@ def store_connect_verify(store: str, otp: str) -> dict:
             "connected_stores": sorted(_CONNECTED_STORES)}
 
 
+# ---- app-driven browser OAuth (phone opens the real consent URL) ----
+async def oauth_start(store: str) -> dict:
+    m = registry.by_id(store)
+    if not m or not getattr(m, "real", False):
+        return {"status": "unknown_or_mock", "store": store}
+    if m.connected():  # token already cached — no browser needed
+        _CONNECTED_STORES.add(store)
+        return {"status": "connected", "store": store,
+                "connected_stores": sorted(_CONNECTED_STORES)}
+
+    loop = asyncio.get_event_loop()
+    url_fut: asyncio.Future = loop.create_future()
+
+    async def on_url(url: str) -> None:
+        if not url_fut.done():
+            url_fut.set_result(url)
+
+    async def run() -> None:
+        try:
+            ok = await m.mcp.app_connect(on_url)  # type: ignore[attr-defined]
+            if ok:
+                _CONNECTED_STORES.add(store)
+        except Exception as e:
+            print(f"[oauth {store}] {e}")
+            if not url_fut.done():
+                url_fut.set_exception(e)
+
+    asyncio.create_task(run())
+    try:
+        url = await asyncio.wait_for(url_fut, timeout=30)
+    except Exception as e:
+        return {"status": "error", "store": store, "detail": str(e)}
+    return {"status": "auth_required", "store": store, "auth_url": url}
+
+
+def oauth_status(store: str) -> dict:
+    m = registry.by_id(store)
+    connected = bool(m and m.connected())
+    if connected:
+        _CONNECTED_STORES.add(store)
+    return {"store": store, "connected": connected,
+            "connected_stores": sorted(_CONNECTED_STORES)}
+
+
 def orders() -> dict:
     return {"orders": list(reversed(_ORDERS))}
 
@@ -219,61 +389,20 @@ def _record_order(cart, order_id: str) -> None:
     })
 
 
-# ---- P3P mandate + pre-auth (edge #1) ----
-async def create_mandate(session_id: str, mobile: str, cap_inr: int) -> dict:
-    """One-time human approval of a UPI spend cap; after this the agent pays autonomously."""
-    s = _get(session_id)
-    s.mobile = mobile
-    res = await p3p.create_mandate(mobile, cap_inr)
-    return {"status": "mandate_active", **res, "remaining_inr": p3p.balance(mobile)}
-
-
-def set_preauth(session_id: str, product: str, max_price_inr: int) -> dict:
-    """Human-not-present rule: 'auto-buy <product> if price <= ₹X'."""
-    s = _get(session_id)
-    s.preauth = {"product": product, "max_price_inr": max_price_inr}
-    return {"status": "preauth_set", **s.preauth,
-            "needs_mandate": s.mobile is None}
-
-
-async def run_preauth(session_id: str) -> dict:
-    """Agent checks the rule against live store prices; buys autonomously if it matches."""
-    s = _get(session_id)
-    if not s.preauth:
-        return {"status": "no_preauth"}
-    intent = Intent(product=s.preauth["product"], budget_inr=s.preauth["max_price_inr"])
-    decision = await _agentic_decision(intent)
-    s.decision = decision
-    if decision.status != "awaiting_approval" or not decision.cart:
-        return {"status": "no_match", "steps": decision.steps}
-    if decision.cart.price_inr > s.preauth["max_price_inr"]:
-        return {"status": "above_limit", "found_inr": decision.cart.price_inr}
-    # matches → agent captures WITHOUT a second human step (mandate already approved)
-    return await pay(session_id, PayReq(upi_app="gpay"), auto=True)
-
-
 # ---- §8.6 pay ----
-async def pay(session_id: str, req: PayReq, auto: bool = False) -> dict:
+async def pay(session_id: str, req: PayReq) -> dict:
+    """Record the order after a real UPI payment.
+
+    The actual money movement happens on-device: the app fires a UPI deep link
+    (upi://pay) that opens the user's own UPI app, where they enter their PIN.
+    Once that succeeds the app calls this to persist the order + return a receipt.
+    """
     s = _get(session_id)
     if not s.decision or not s.decision.cart:
         return {"status": "no_cart"}
     cart = s.decision.cart
     audit = {k: f"{k}-{session_id[:8]}" for k in ("intent", "cart", "payment")}
 
-    # P3P path: if a mandate is approved, the agent captures within the cap (agentic).
-    if s.mobile and p3p.mandate_for(s.mobile):
-        cap = await p3p.capture(s.mobile, cart.price_inr, cart.store, f"SM-{session_id[:4]}")
-        if cap.get("status") == "captured":
-            receipt = await payment.charge(cart, "P3P · UPI ReservePay", audit)
-            _record_order(cart, receipt.order_id)
-            body = {"status": "complete", "order_id": receipt.order_id,
-                    "receipt": {**receipt.model_dump(), "paid_via": f"P3P · {cap['rail']}",
-                                "p3p": cap}}
-            body["autonomous"] = auto  # bought without a second human step
-            return body
-        return {"status": cap.get("status", "p3p_failed"), "p3p": cap}
-
-    # fallback: mock UPI (framed)
-    receipt = await payment.charge(cart, req.upi_app, audit)
+    receipt = await payment.charge(cart, req.upi_app, audit, upi_txn_id=req.upi_txn_id)
     _record_order(cart, receipt.order_id)
     return {"status": "complete", "order_id": receipt.order_id, "receipt": receipt.model_dump()}

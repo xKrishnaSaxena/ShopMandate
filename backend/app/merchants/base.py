@@ -116,6 +116,12 @@ class RealMerchant(Merchant):
         await self.tools()  # list_tools forces the OAuth flow if no token yet
         return self.connected()
 
+    async def tool_defs(self) -> list[dict]:
+        """Full tool definitions (for discovering cart/checkout/order/payment tools)."""
+        if not self.connected():
+            return []
+        return await self.mcp.list_tool_defs()
+
     def _price(self, p: dict) -> float | None:
         v = _first(p, ["sellingPrice", "price", "finalPrice", "offerPrice", "mrp"])
         if not isinstance(v, (int, float)):

@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
@@ -45,21 +47,14 @@ import com.shopmandate.ui.theme.InkMuted
 import com.shopmandate.ui.theme.SuccessGreen
 import com.shopmandate.net.OrderDto
 
-// Fallback preview history (real orders come from GET /api/orders).
-private val MOCK_ORDERS = listOf(
-    OrderDto("boAt Airdopes 141 – Wireless Earbuds", "Store B", 1800, "#SM-4821", "Aaj", "On the way", false),
-    OrderDto("Aashirvaad Atta 5kg", "Store B", 245, "#SM-4790", "2 din pehle", "Delivered", true),
-    OrderDto("Fast Charger 25W", "Store A", 499, "#SM-4712", "Pichle hafte", "Delivered", true),
-    OrderDto("Amul Doodh 1L × 6", "Store B", 330, "#SM-4655", "Pichle hafte", "Delivered", true),
-)
-
 /**
  * Orders — user's past orders (history). Entry point: Home top-bar receipt icon,
- * and Success screen's "Track order".
+ * and Success screen's "Track order". Real orders come from GET /api/orders;
+ * when there are none we show an empty state (no fake/mock history).
  */
 @Composable
 fun OrdersScreen(
-    orders: List<OrderDto> = MOCK_ORDERS,
+    orders: List<OrderDto> = emptyList(),
     onBack: () -> Unit = {},
 ) {
     Column(
@@ -101,13 +96,44 @@ fun OrdersScreen(
             }
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(orders) { order -> OrderCard(order) }
+        if (orders.isEmpty()) {
+            EmptyOrders()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(orders) { order -> OrderCard(order) }
+            }
         }
+    }
+}
+
+@Composable
+private fun ColumnScope.EmptyOrders() {
+    Column(
+        modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(Brand.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.ShoppingBag, contentDescription = null, tint = Brand, modifier = Modifier.size(32.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Abhi koi order nahi", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Jab aap kuch khareedenge, aapka order yahan dikhega.",
+            color = InkMuted,
+            fontSize = 14.sp,
+        )
     }
 }
 
@@ -135,7 +161,7 @@ private fun OrderCard(order: OrderDto) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    order.product,
+                    if (order.qty > 1) "${order.product}  ×${order.qty}" else order.product,
                     color = Ink,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
@@ -148,12 +174,30 @@ private fun OrderCard(order: OrderDto) {
                     Spacer(Modifier.width(4.dp))
                     Text("${order.store} · ${order.date}", color = InkMuted, fontSize = 12.sp)
                 }
+                if (order.addressLine != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(Icons.Filled.Place, contentDescription = null, tint = InkMuted, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            order.addressLabel?.let { "$it · ${order.addressLine}" } ?: order.addressLine,
+                            color = InkMuted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 StatusChip(order.status, order.delivered)
             }
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text("₹${order.priceInr}", color = Brand, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (order.itemPriceInr != null && order.deliveryFeeInr != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "₹${order.itemPriceInr} + ₹${order.deliveryFeeInr} del",
+                        color = InkMuted, fontSize = 10.sp,
+                    )
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(order.orderId, color = InkMuted, fontSize = 11.sp)
             }

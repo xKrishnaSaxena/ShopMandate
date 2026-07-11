@@ -28,14 +28,13 @@ _MOCK_BLINKIT = {
 
 
 def _build() -> list[Merchant]:
+    # Real MCP merchants only — no mock stores. A merchant responds only once its OAuth
+    # token is cached (connected); if none are connected, search returns "no stock".
     return [
         RealMerchant("zepto", "Zepto", "https://mcp.zepto.co.in/mcp",
                      "tools:read tools:write", price_in_paise=True, delivery="~10 min"),
         RealMerchant("instamart", "Swiggy Instamart", "https://mcp.swiggy.com/im",
                      "mcp:tools mcp:resources", price_in_paise=True, delivery="~15 min"),
-        MockMerchant("blinkit", "Blinkit", _MOCK_BLINKIT),
-        MockMerchant("store_a", "Store A", _MOCK_A),
-        MockMerchant("store_b", "Store B", _MOCK_B),
     ]
 
 
@@ -44,6 +43,22 @@ MERCHANTS: list[Merchant] = _build()
 
 def by_id(mid: str) -> Merchant | None:
     return next((m for m in MERCHANTS if m.id == mid), None)
+
+
+def resolve_store_id(store: str) -> str | None:
+    """Map a free-form store name the agent said ('Zepto', 'Swiggy Instamart', 'swiggy')
+    back to a merchant id ('zepto', 'instamart'). Case/substring tolerant."""
+    s = (store or "").strip().lower()
+    if not s:
+        return None
+    for m in MERCHANTS:
+        if s == m.id.lower() or s == m.name.lower():
+            return m.id
+    for m in MERCHANTS:  # looser: substring either way (e.g. 'swiggy' -> 'Swiggy Instamart')
+        name = m.name.lower()
+        if s in name or name in s or s in m.id.lower():
+            return m.id
+    return None
 
 
 def status() -> list[dict]:

@@ -29,6 +29,22 @@ interface ApiService {
     @GET("api/orders")
     suspend fun orders(): OrdersResponse
 
+    // ---- real MCP order pipeline ----
+    @GET("api/merchants/{mid}/addresses")
+    suspend fun addresses(@Path("mid") mid: String): AddressesResponse
+
+    @POST("api/merchants/{mid}/order/prepare")
+    suspend fun orderPrepare(@Path("mid") mid: String, @Body body: OrderPrepareRequest): OrderPrepareResponse
+
+    @POST("api/merchants/{mid}/order/prepare_cart")
+    suspend fun orderPrepareCart(@Path("mid") mid: String, @Body body: OrderPrepareCartRequest): OrderPrepareResponse
+
+    @POST("api/merchants/{mid}/order/confirm")
+    suspend fun orderConfirm(@Path("mid") mid: String, @Body body: OrderConfirmRequest): OrderConfirmResponse
+
+    @POST("api/merchants/{mid}/order/status")
+    suspend fun orderStatus(@Path("mid") mid: String, @Body body: OrderStatusRequest): OrderStatusResponse
+
     // ---- wow-factors ----
     @POST("api/say")
     suspend fun say(@Body body: SayRequest): SayResponse
@@ -38,4 +54,14 @@ interface ApiService {
 
     @GET("api/session/{id}/research")
     suspend fun research(@Path("id") sessionId: String): ResearchResponse
+
+    // ---- app-driven browser OAuth (real store connect) ----
+    @POST("api/connect/{store}/oauth/start")
+    suspend fun oauthStart(@Path("store") store: String): OAuthStartResponse
+
+    @GET("api/connect/{store}/status")
+    suspend fun connectStatus(@Path("store") store: String): ConnectStatusResponse
+
+    @POST("api/oauth/complete")
+    suspend fun oauthComplete(@Body body: OAuthCompleteRequest): OAuthCompleteResponse
 }

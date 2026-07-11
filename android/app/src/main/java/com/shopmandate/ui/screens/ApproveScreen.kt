@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
@@ -62,12 +64,19 @@ fun ApproveScreen(
     reason: String = "Store B chuna — ₹150 sasta + jaldi delivery",
     delivery: String = "kal shaam tak",
     visualB64: String? = null,
+    itemPriceInr: Int? = null,
+    deliveryFeeInr: Int? = null,
+    totalInr: Int? = null,
+    addressLabel: String? = null,
+    addressLine: String? = null,
+    onChangeAddress: () -> Unit = {},
     onApprove: () -> Unit = {},
     onReject: () -> Unit = {},
     onBack: () -> Unit = {},
     onVisualize: () -> Unit = {},
 ) {
     val priceText = "₹${"%,d".format(priceInr)}"
+    val payText = "₹${"%,d".format(totalInr ?: priceInr)}"
     val visual = remember(visualB64) { visualB64?.let { decodeB64(it) } }
     Column(
         modifier = Modifier
@@ -88,7 +97,7 @@ fun ApproveScreen(
                 Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Brand,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(24.dp).clickable { onBack() },
             )
             Spacer(Modifier.weight(1f))
             Text("ShopMandate", color = Brand, fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -184,6 +193,50 @@ fun ApproveScreen(
             }
         }
 
+        // ---- Bill breakdown (transparent: item + delivery = total) ----
+        if (itemPriceInr != null && deliveryFeeInr != null) {
+            Spacer(Modifier.height(16.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = AppSurface,
+                border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.10f)),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    BillRow("Item total", "₹$itemPriceInr")
+                    Spacer(Modifier.height(8.dp))
+                    BillRow("Delivery fee", "₹$deliveryFeeInr")
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(InkMuted.copy(alpha = 0.12f)))
+                    Spacer(Modifier.height(10.dp))
+                    BillRow("To pay", payText, bold = true)
+                }
+            }
+        }
+
+        // ---- Delivery address ----
+        if (addressLine != null) {
+            Spacer(Modifier.height(12.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = Brand.copy(alpha = 0.05f),
+            ) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Filled.Place, contentDescription = null, tint = Brand, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Deliver to" + (addressLabel?.let { " · $it" } ?: ""), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Spacer(Modifier.height(2.dp))
+                        Text(addressLine, color = InkMuted, fontSize = 12.sp, lineHeight = 16.sp)
+                    }
+                    TextButton(onClick = onChangeAddress) {
+                        Text("Change", color = Brand, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
         Spacer(Modifier.weight(1f))
 
         // ---- CTA ----
@@ -197,13 +250,24 @@ fun ApproveScreen(
         ) {
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Approve & Pay $priceText", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("Approve & Pay $payText", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onReject) {
             Text("Nahi, kuch aur dikhao", color = InkMuted, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun BillRow(label: String, value: String, bold: Boolean = false) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = if (bold) Ink else InkMuted, fontSize = if (bold) 16.sp else 14.sp,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+        Spacer(Modifier.weight(1f))
+        Text(value, color = if (bold) Ink else Ink, fontSize = if (bold) 18.sp else 14.sp,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium)
     }
 }
 

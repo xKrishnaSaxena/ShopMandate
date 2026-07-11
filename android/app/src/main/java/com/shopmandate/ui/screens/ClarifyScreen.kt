@@ -2,6 +2,7 @@ package com.shopmandate.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
@@ -52,8 +54,8 @@ import com.shopmandate.ui.theme.InkMuted
  */
 @Composable
 fun ClarifyScreen(
-    product: String = "Wireless earbuds",
-    budgetInr: Int? = 2000,
+    product: String = "Product",
+    budgetInr: Int? = null,
     qty: Int = 1,
     question: String? = null,
     onNext: () -> Unit = {},
@@ -61,6 +63,11 @@ fun ClarifyScreen(
 ) {
     var type by remember { mutableStateOf("Wireless") }
     var budget by remember { mutableStateOf(budgetInr?.let { "₹$it" } ?: "Koi budget nahi ∞") }
+
+    // The "Wireless / Wired" chips are audio-specific — only surface them for audio products.
+    val isAudio = product.lowercase().let { p ->
+        listOf("earbud", "earphone", "headphone", "tws", "airdope", "audio", "speaker").any { it in p }
+    }
 
     Column(
         modifier = Modifier
@@ -81,10 +88,11 @@ fun ClarifyScreen(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Brand.copy(alpha = 0.12f)),
+                    .background(Brand.copy(alpha = 0.12f))
+                    .clickable { onBack() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Person, contentDescription = null, tint = Brand)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Brand)
             }
             Spacer(Modifier.width(12.dp))
             Text("ShopMandate", color = Brand, fontWeight = FontWeight.Bold, fontSize = 22.sp)
@@ -135,7 +143,7 @@ fun ClarifyScreen(
             Spacer(Modifier.width(10.dp))
             Surface(shape = RoundedCornerShape(18.dp), color = Brand.copy(alpha = 0.06f)) {
                 Text(
-                    question ?: "Ek baat — wireless hi chahiye ya wired bhi chalega?",
+                    question ?: "Thoda aur batayein — kaunsa variant chahiye?",
                     color = Ink,
                     fontSize = 17.sp,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -145,18 +153,20 @@ fun ClarifyScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // ---- TYPE ----
-        SectionLabel("TYPE")
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ChoiceChip("Wireless", selected = type == "Wireless") { type = "Wireless" }
-            ChoiceChip("Wired bhi ok", selected = type == "Wired") { type = "Wired" }
-        }
+        // ---- TYPE (audio-only variant chips) ----
+        if (isAudio) {
+            SectionLabel("TYPE")
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ChoiceChip("Wireless", selected = type == "Wireless") { type = "Wireless" }
+                ChoiceChip("Wired bhi ok", selected = type == "Wired") { type = "Wired" }
+            }
 
-        Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
+        }
 
         // ---- ADJUST BUDGET ----
         SectionLabel("ADJUST BUDGET")

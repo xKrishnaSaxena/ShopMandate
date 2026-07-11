@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -55,7 +56,8 @@ import com.shopmandate.ui.theme.Ink
 import com.shopmandate.ui.theme.InkMuted
 import com.shopmandate.ui.theme.SuccessGreen
 
-private val STORES = listOf("Zepto", "Swiggy")
+// (backend id, display label) — the id is the OAuth path param
+private val STORES = listOf("zepto" to "Zepto", "instamart" to "Swiggy")
 
 /**
  * Screen 6 — Connect stores (one-time). Mirrors design/connect_store_phone/screen.png.
@@ -64,12 +66,11 @@ private val STORES = listOf("Zepto", "Swiggy")
 @Composable
 fun ConnectScreen(
     connectedStores: Set<String> = emptySet(),
+    connecting: String? = null,
     onConnectStore: (String) -> Unit = {},
     onDone: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
-    var phone by remember { mutableStateOf("") }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -109,45 +110,22 @@ fun ConnectScreen(
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            "Order place karne ke liye ek baar login. Har store official + secure — aur har store ka apna OTP aayega.",
+            "Ek baar login — Connect dabao, browser khulega, wahan mobile + OTP daalo. Har store official + secure.",
             color = InkMuted,
             fontSize = 15.sp,
             lineHeight = 22.sp,
         )
 
-        Spacer(Modifier.height(20.dp))
-        // ---- Shared phone number ----
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = AppSurface,
-            border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.12f)),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("Mobile Number", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { if (it.length <= 10 && it.all(Char::isDigit)) phone = it },
-                    prefix = { Text("+91  ", color = Ink, fontWeight = FontWeight.Bold) },
-                    placeholder = { Text("98765 43210", color = InkMuted) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(24.dp))
         Text("STORES", color = InkMuted, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            STORES.forEach { store ->
+            STORES.forEach { (id, label) ->
                 StoreConnectRow(
-                    name = store,
-                    connected = store in connectedStores,
-                    onConnect = { onConnectStore(store) },
+                    name = label,
+                    connected = id in connectedStores,
+                    busy = connecting == id,
+                    onConnect = { onConnectStore(id) },
                 )
             }
         }
@@ -181,7 +159,7 @@ fun ConnectScreen(
 }
 
 @Composable
-private fun StoreConnectRow(name: String, connected: Boolean, onConnect: () -> Unit) {
+private fun StoreConnectRow(name: String, connected: Boolean, busy: Boolean = false, onConnect: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -211,14 +189,18 @@ private fun StoreConnectRow(name: String, connected: Boolean, onConnect: () -> U
                     Text("OFFICIAL", color = SuccessGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            if (connected) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            when {
+                connected -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Connected", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
-            } else {
-                Button(
+                busy -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Brand)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Connecting…", color = Brand, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                }
+                else -> Button(
                     onClick = onConnect,
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(containerColor = Brand),

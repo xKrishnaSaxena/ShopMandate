@@ -2,6 +2,7 @@ package com.shopmandate.net
 
 import android.content.Context
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,6 +28,27 @@ object ApiClient {
 
     /** Uses the currently-configured base URL (from DevConfig). */
     fun create(context: Context): ApiService = create(DevConfig.getBaseUrl(context))
+
+    /** ws:// URL for the Live voice bridge, derived from the configured base URL. */
+    fun liveWsUrl(context: Context): String =
+        DevConfig.getBaseUrl(context)
+            .replaceFirst("https://", "wss://")
+            .replaceFirst("http://", "ws://")
+            .trimEnd('/') + "/ws/live"
+
+    /** Parse a {"type":"quotes","quotes":[...]} Live event into typed quotes. */
+    fun parseQuotes(text: String): List<Quote> = try {
+        json.decodeFromString<LiveQuotesEvent>(text).quotes
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    /** Parse a {"type":"cart"|"checkout","items":[...],"total_inr":N,"store":...} Live event. */
+    fun parseLiveCart(text: String): LiveCartEvent = try {
+        json.decodeFromString<LiveCartEvent>(text)
+    } catch (e: Exception) {
+        LiveCartEvent()
+    }
 
     fun create(baseUrl: String): ApiService {
         val logging = HttpLoggingInterceptor().apply {

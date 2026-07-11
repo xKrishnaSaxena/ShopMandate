@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load backend/.env (GOOGLE_API_KEY=...) before importing modules that read env.
@@ -20,14 +20,12 @@ if _env.exists():
 from . import orchestrator  # noqa: E402
 import base64  # noqa: E402
 
-from . import gemini, p3p  # noqa: E402
+from . import gemini  # noqa: E402
 from .models import (  # noqa: E402
     ClarifyReq,
     ConnectStartReq,
     ConnectVerifyReq,
-    MandateReq,
     PayReq,
-    PreauthReq,
     SayReq,
     StartReq,
     VisualizeReq,
@@ -49,6 +47,21 @@ def _session(fn):
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True, "flash": os.environ.get("FLASH_MODEL", "gemini-flash-latest")}
+
+
+@app.websocket("/ws/live")
+async def ws_live(ws: WebSocket) -> None:
+    """Real-time voice shopping agent (Gemini Live)."""
+    await ws.accept()
+    from . import live
+    try:
+        await live.bridge(ws)
+    except Exception as e:  # noqa: BLE001
+        print(f"[ws_live] {e}")
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 @app.post("/api/session/start")
@@ -85,15 +98,41 @@ def store_connect_verify(store: str, req: ConnectVerifyReq) -> dict:
     return orchestrator.store_connect_verify(store, req.otp)
 
 
+# ---- app-driven browser OAuth (phone opens the real consent page) ----
+@app.post("/api/connect/{store}/oauth/start")
+async def store_oauth_start(store: str) -> dict:
+    return await orchestrator.oauth_start(store)
+
+
+@app.get("/api/connect/{store}/status")
+def store_connect_status(store: str) -> dict:
+    return orchestrator.oauth_status(store)
+
+
+@app.get("/api/oauth/callback")
+def oauth_callback(code: str = "", state: str = ""):
+    from fastapi.responses import HTMLResponse
+
+    from .merchants import mcp_client
+    ok = mcp_client.resolve_app_callback(code, state)
+    msg = "Connected! Ab app pe wapas jao." if ok else "Session expire ho gaya — dobara try karo."
+    return HTMLResponse(
+        f"<body style='font-family:system-ui;text-align:center;padding-top:80px'>"
+        f"<h2>{msg}</h2></body>"
+    )
+
+
+@app.post("/api/oauth/complete")
+def oauth_complete(body: dict):
+    """The app's loopback catcher delivers the OAuth (code, state) here → resume token exchange."""
+    from .merchants import mcp_client
+    ok = mcp_client.resolve_app_callback(body.get("code", ""), body.get("state", ""))
+    return {"ok": ok}
+
+
 @app.get("/api/orders")
 def orders() -> dict:
     return orchestrator.orders()
-
-
-# ---- Pine Labs P3P: agentic payment (edge #1) ----
-@app.get("/api/p3p/status")
-def p3p_status() -> dict:
-    return {"mode": p3p.mode()}
 
 
 # ---- Wow-factors ----
@@ -105,7 +144,7 @@ def visualize(req: VisualizeReq) -> dict:
                   f"photo of a similar item{(' ' + req.style) if req.style else ' on a plain white background'}. "
                   "Studio lighting, high detail, no text or watermark.")
     else:
-        prompt = (f"Clean e-commerce product photo of {req.product or 'wireless earbuds'}"
+        prompt = (f"Clean e-commerce product photo of {req.product or 'the product'}"
                   f"{(', ' + req.style) if req.style else ', on a plain white background'}. "
                   "Studio lighting, high detail, no text or watermark.")
     try:
@@ -160,30 +199,60 @@ def research(sid: str) -> dict:
     return {"note": note, "quotes_considered": len(s.decision.quotes)}
 
 
-@app.post("/api/session/{sid}/mandate")
-async def create_mandate(sid: str, req: MandateReq) -> dict:
-    try:
-        return await orchestrator.create_mandate(sid, req.mobile, req.cap_inr)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="unknown session_id")
-
-
-@app.post("/api/session/{sid}/preauth")
-def set_preauth(sid: str, req: PreauthReq) -> dict:
-    return _session(lambda: orchestrator.set_preauth(sid, req.product, req.max_price_inr))
-
-
-@app.post("/api/session/{sid}/preauth/run")
-async def run_preauth(sid: str) -> dict:
-    try:
-        return await orchestrator.run_preauth(sid)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="unknown session_id")
-
-
 @app.post("/api/merchants/{mid}/connect")
 async def merchant_connect(mid: str) -> dict:
     return await orchestrator.connect_merchant(mid)
+
+
+@app.get("/api/merchants/{mid}/tools")
+async def merchant_tools(mid: str) -> dict:
+    """Discovery: full tool defs of a connected merchant (to build the order pipeline)."""
+    return await orchestrator.merchant_tools(mid)
+
+
+@app.post("/api/merchants/{mid}/call")
+async def merchant_call(mid: str, body: dict) -> dict:
+    """DEV-ONLY: call an arbitrary MCP tool to observe real response shapes."""
+    return await orchestrator.merchant_call(mid, body.get("tool", ""), body.get("args"))
+
+
+@app.get("/api/merchants/{mid}/addresses")
+async def merchant_addresses(mid: str) -> dict:
+    """Saved delivery addresses (for the pre-order address picker)."""
+    return await orchestrator.merchant_addresses(mid)
+
+
+@app.post("/api/merchants/{mid}/order/prepare")
+async def order_prepare(mid: str, body: dict) -> dict:
+    """Build the real cart + preview the order (no charge). body: {query, budget_inr?, qty?, address_id?}"""
+    return await orchestrator.order_prepare(
+        mid, body.get("query", ""), body.get("budget_inr"),
+        int(body.get("qty", 1) or 1), body.get("address_id"),
+    )
+
+
+@app.post("/api/merchants/{mid}/order/prepare_cart")
+async def order_prepare_cart(mid: str, body: dict) -> dict:
+    """Multi-item cart preview (Live voice). body: {items:[{query, budget_inr?, qty?}], address_id?}"""
+    return await orchestrator.order_prepare_cart(
+        mid, body.get("items") or [], body.get("address_id"),
+    )
+
+
+@app.post("/api/merchants/{mid}/order/confirm")
+async def order_confirm(mid: str, body: dict) -> dict:
+    """Place the REAL order — charges via the merchant. body: {address_id, rail?, intent_app?, meta?}"""
+    return await orchestrator.order_confirm(
+        mid, body.get("address_id", ""),
+        body.get("rail", "online"), body.get("intent_app", "gpay://upi/"),
+        body.get("meta"),
+    )
+
+
+@app.post("/api/merchants/{mid}/order/status")
+async def order_status(mid: str, body: dict) -> dict:
+    """Poll payment/order status after the payment link is opened. body: {order_id}"""
+    return await orchestrator.order_status(mid, body.get("order_id", ""))
 
 
 @app.post("/api/session/{sid}/connect/start")

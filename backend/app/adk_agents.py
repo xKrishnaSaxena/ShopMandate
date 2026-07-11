@@ -86,7 +86,7 @@ async def run_shopping(intent: Intent) -> dict | None:
     )
     msg = types.Content(
         role="user",
-        parts=[types.Part(text=f"Buy: {intent.product or 'wireless earbuds'}; budget ₹{intent.budget_inr or 'any'}")],
+        parts=[types.Part(text=f"Buy: {intent.product or 'the requested item'}; budget ₹{intent.budget_inr or 'any'}")],
     )
     async for _ in _runner.run_async(user_id=uid, session_id=sid, new_message=msg):
         pass

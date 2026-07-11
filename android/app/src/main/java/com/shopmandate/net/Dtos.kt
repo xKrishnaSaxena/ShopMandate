@@ -116,6 +116,27 @@ data class VisualizeResponse(val imageB64: String, val mime: String = "image/png
 @Serializable
 data class ResearchResponse(val note: String, val quotesConsidered: Int = 0)
 
+// live voice bridge event: {"type":"quotes","quotes":[...]}
+@Serializable
+data class LiveQuotesEvent(val quotes: List<Quote> = emptyList())
+
+// ---- Live voice multi-item cart (Phase B) ----
+@Serializable
+data class LiveCartItem(
+    val query: String = "",
+    val store: String = "",       // merchant id the cart is locked to ("zepto" / "instamart")
+    val name: String = "",
+    val priceInr: Int = 0,
+)
+
+/** {"type":"cart"|"checkout","items":[...],"total_inr":N,"store":"zepto"} */
+@Serializable
+data class LiveCartEvent(
+    val items: List<LiveCartItem> = emptyList(),
+    val totalInr: Int = 0,
+    val store: String? = null,
+)
+
 // ---- POST /connect/{store}/start & /verify ----
 @Serializable
 data class ConnectStartRequest(val phone: String)
@@ -126,6 +147,28 @@ data class ConnectStartResponse(
     val store: String,
     val maskedPhone: String,
 )
+
+@Serializable
+data class OAuthStartResponse(
+    val status: String,               // "auth_required" | "connected" | "error" | "unknown_or_mock"
+    val store: String = "",
+    val authUrl: String? = null,      // open this in the phone browser (mobile + OTP)
+    val connectedStores: List<String> = emptyList(),
+    val detail: String? = null,
+)
+
+@Serializable
+data class ConnectStatusResponse(
+    val store: String,
+    val connected: Boolean = false,
+    val connectedStores: List<String> = emptyList(),
+)
+
+@Serializable
+data class OAuthCompleteRequest(val code: String, val state: String)
+
+@Serializable
+data class OAuthCompleteResponse(val ok: Boolean = false)
 
 @Serializable
 data class ConnectVerifyRequest(val otp: String)
@@ -143,6 +186,7 @@ data class PayRequest(
     val method: String = "upi",
     val upiApp: String? = null,
     val upiId: String? = null,
+    val upiTxnId: String? = null,
 )
 
 @Serializable
@@ -175,14 +219,117 @@ data class PayResponse(
 data class OrderDto(
     val product: String,
     val store: String,
-    val priceInr: Int,
+    val priceInr: Int,                 // total paid (item + delivery)
     val orderId: String,
     val date: String,
     val status: String,
     val delivered: Boolean,
+    val qty: Int = 1,
+    val itemPriceInr: Int? = null,     // item subtotal
+    val deliveryFeeInr: Int? = null,   // delivery fee (shown separately)
+    val addressLabel: String? = null,  // e.g. "Home", "Office"
+    val addressLine: String? = null,   // full delivery address
 )
 
 @Serializable
 data class OrdersResponse(
     val orders: List<OrderDto> = emptyList(),
+)
+
+// ---- real MCP order pipeline (Zepto / Instamart) ----
+@Serializable
+data class AddressDto(
+    val id: String? = null,
+    val label: String? = null,
+    val line: String? = null,
+    val lat: Double? = null,
+    val lng: Double? = null,
+)
+
+@Serializable
+data class AddressesResponse(
+    val status: String = "",
+    val name: String? = null,
+    val addresses: List<AddressDto> = emptyList(),
+)
+
+@Serializable
+data class OrderPrepareRequest(
+    val query: String,
+    val budgetInr: Int? = null,
+    val qty: Int = 1,
+    val addressId: String? = null,
+)
+
+@Serializable
+data class OrderPrepareResponse(
+    val status: String,
+    val store: String? = null,
+    val product: String? = null,
+    val qty: Int = 1,
+    val itemPriceInr: Int? = null,
+    val deliveryFeeInr: Int? = null,
+    val toPayInr: Int? = null,
+    val address: AddressDto? = null,
+    val addressId: String? = null,
+    val deliverable: Boolean? = null,
+    val items: List<PrepareLine> = emptyList(),   // multi-item cart breakdown (Live voice)
+    val detail: String? = null,
+)
+
+@Serializable
+data class PrepareLine(
+    val name: String? = null,
+    val qty: Int = 1,
+    val priceInr: Int? = null,
+)
+
+@Serializable
+data class CartLineRequest(
+    val query: String,
+    val budgetInr: Int? = null,
+    val qty: Int = 1,
+)
+
+@Serializable
+data class OrderPrepareCartRequest(
+    val items: List<CartLineRequest>,
+    val addressId: String? = null,
+)
+
+@Serializable
+data class OrderConfirmMeta(
+    val product: String? = null,
+    val qty: Int = 1,
+    val itemPriceInr: Int? = null,
+    val deliveryFeeInr: Int? = null,
+    val toPayInr: Int? = null,
+    val address: AddressDto? = null,
+)
+
+@Serializable
+data class OrderConfirmRequest(
+    val addressId: String,
+    val rail: String = "online",
+    val intentApp: String = "gpay://upi/",
+    val meta: OrderConfirmMeta? = null,
+)
+
+@Serializable
+data class OrderConfirmResponse(
+    val status: String,
+    val store: String? = null,
+    val orderId: String? = null,
+    val paymentLink: String? = null,
+    val detail: String? = null,
+)
+
+@Serializable
+data class OrderStatusRequest(val orderId: String)
+
+@Serializable
+data class OrderStatusResponse(
+    val status: String,
+    val paid: Boolean = false,
+    val detail: String? = null,
 )

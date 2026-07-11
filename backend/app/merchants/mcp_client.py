@@ -26,6 +26,28 @@ REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}/callback"
 TOKENS_DIR = Path(__file__).resolve().parent.parent.parent / ".mcp-tokens"
 
 
+# ---- App-driven OAuth (browser opens on the PHONE; callback returns via FastAPI) ----
+_APP_PENDING: dict[str, asyncio.Future] = {}
+
+
+def app_redirect_uri() -> str | None:
+    """Loopback redirect (RFC 8252). The phone's browser redirects to localhost ON THE
+    DEVICE, where the app catches the code and POSTs it to /api/oauth/complete. Zepto &
+    Swiggy only allow localhost redirects (ngrok/LAN/custom domains are rejected), so this
+    is the only redirect that passes their DCR check. Port must match the app's loopback."""
+    port = os.environ.get("OAUTH_LOOPBACK_PORT", "8971")
+    return f"http://localhost:{port}/callback"
+
+
+def resolve_app_callback(code: str, state: str) -> bool:
+    """Called by FastAPI GET /api/oauth/callback when the phone's browser redirects back."""
+    fut = _APP_PENDING.get(state)
+    if fut and not fut.done():
+        fut.get_loop().call_soon_threadsafe(fut.set_result, (code, state))
+        return True
+    return False
+
+
 class FileTokenStorage(TokenStorage):
     """Per-merchant token + client-registration cache (JSON file)."""
 
@@ -157,3 +179,63 @@ class MCPMerchant:
                 await session.initialize()
                 tools = await session.list_tools()
                 return [t.name for t in tools.tools]
+
+    async def list_tool_defs(self) -> list[dict]:
+        """Full tool definitions (name + description + input schema) for discovery —
+        used to find the cart / checkout / order / payment tools a merchant exposes."""
+        provider = OAuthClientProvider(
+            server_url=self.server_url,
+            client_metadata=_client_metadata(self.scope),
+            storage=self.storage,
+            redirect_handler=_redirect_handler,
+            callback_handler=_callback_handler,
+        )
+        async with streamablehttp_client(self.server_url, auth=provider) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                return [
+                    {
+                        "name": t.name,
+                        "description": getattr(t, "description", "") or "",
+                        "input_schema": getattr(t, "inputSchema", None),
+                    }
+                    for t in tools.tools
+                ]
+
+    async def app_connect(self, on_auth_url) -> bool:
+        """OAuth where the auth URL is handed to `on_auth_url` (the phone opens it in a
+        browser) and the callback comes back via FastAPI /api/oauth/callback →
+        resolve_app_callback(). Returns True once a token is cached."""
+        redirect_uri = app_redirect_uri()
+        if not redirect_uri:
+            raise RuntimeError("PUBLIC_BASE_URL not set (needed for phone OAuth redirect)")
+        holder: dict = {"state": None}
+
+        async def redirect_handler(url: str) -> None:
+            holder["state"] = parse_qs(urlparse(url).query).get("state", [None])[0]
+            _APP_PENDING[holder["state"]] = asyncio.get_event_loop().create_future()
+            await on_auth_url(url)
+
+        async def callback_handler():
+            code, st = await _APP_PENDING[holder["state"]]
+            _APP_PENDING.pop(holder["state"], None)
+            return code, st
+
+        metadata = OAuthClientMetadata(
+            redirect_uris=[redirect_uri],  # type: ignore[list-item]
+            token_endpoint_auth_method="none",
+            grant_types=["authorization_code", "refresh_token"],
+            response_types=["code"],
+            scope=self.scope,
+            client_name="shopmandate",
+        )
+        provider = OAuthClientProvider(
+            server_url=self.server_url, client_metadata=metadata, storage=self.storage,
+            redirect_handler=redirect_handler, callback_handler=callback_handler,
+        )
+        async with streamablehttp_client(self.server_url, auth=provider) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                await session.list_tools()
+        return self.connected()

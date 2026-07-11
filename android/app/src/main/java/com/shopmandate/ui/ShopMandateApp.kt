@@ -17,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,12 +29,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shopmandate.Screen
 import com.shopmandate.ShopViewModel
+import com.shopmandate.ui.screens.AddressScreen
 import com.shopmandate.ui.screens.ApproveScreen
 import com.shopmandate.ui.screens.CameraScreen
 import com.shopmandate.ui.screens.ClarifyScreen
 import com.shopmandate.ui.screens.ComparingScreen
 import com.shopmandate.ui.screens.ConnectScreen
 import com.shopmandate.ui.screens.HomeScreen
+import com.shopmandate.ui.screens.LiveScreen
 import com.shopmandate.ui.screens.OrdersScreen
 import com.shopmandate.ui.screens.OtpScreen
 import com.shopmandate.ui.screens.PayScreen
@@ -46,6 +49,7 @@ import com.shopmandate.ui.screens.VoiceScreen
 fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
     val screen by vm.screen.collectAsStateWithLifecycle()
     val connectedStores by vm.connectedStores.collectAsStateWithLifecycle()
+    val connecting by vm.connecting.collectAsStateWithLifecycle()
     val profile by vm.profile.collectAsStateWithLifecycle()
     val reorder by vm.reorderSuggestion.collectAsStateWithLifecycle()
 
@@ -60,6 +64,19 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
     val visualB64 by vm.visualB64.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+    val orderPrep by vm.orderPrep.collectAsStateWithLifecycle()
+    val addresses by vm.addresses.collectAsStateWithLifecycle()
+    val selectedAddressId by vm.selectedAddressId.collectAsStateWithLifecycle()
+    val awaitingPayment by vm.awaitingPayment.collectAsStateWithLifecycle()
+    val liveConnected by vm.liveConnected.collectAsStateWithLifecycle()
+    val liveStatus by vm.liveStatus.collectAsStateWithLifecycle()
+    val liveUserText by vm.liveUserText.collectAsStateWithLifecycle()
+    val liveAgentText by vm.liveAgentText.collectAsStateWithLifecycle()
+    val liveQuotes by vm.liveQuotes.collectAsStateWithLifecycle()
+    val liveCart by vm.liveCart.collectAsStateWithLifecycle()
+    val liveCartTotal by vm.liveCartTotal.collectAsStateWithLifecycle()
+
+    BackHandler(enabled = screen != Screen.Home) { vm.goBack() }
 
     Box(Modifier.fillMaxSize()) {
         when (screen) {
@@ -67,7 +84,7 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 connectedStores = connectedStores,
                 userName = profile.name,
                 reorderSuggestion = reorder,
-                onMicClick = vm::goVoice,
+                onMicClick = vm::startLive,
                 onCameraClick = vm::goCamera,
                 onSuggestionClick = vm::startText,   // tap chip → direct text search
                 onConnectStores = vm::goConnect,
@@ -85,7 +102,7 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 qty = intent?.qty ?: 1,
                 question = clarifyQuestion,
                 onNext = vm::search,             // "Aage badho" → real store search
-                onBack = vm::goVoice,
+                onBack = vm::goBack,
             )
             Screen.Comparing -> ComparingScreen(
                 quotes = quotes,
@@ -97,20 +114,33 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 onSpeak = vm::speak,             // Gemini TTS voice-out
             )
             Screen.Approve -> ApproveScreen(
-                productName = cart?.item ?: intent?.product ?: "Product",
+                productName = orderPrep?.product ?: cart?.item ?: intent?.product ?: "Product",
                 subtitle = buildSubtitle(cart?.color, cart?.warranty),
                 priceInr = cart?.priceInr ?: winner?.priceInr ?: 0,
-                qty = cart?.qty ?: intent?.qty ?: 1,
+                qty = orderPrep?.qty ?: cart?.qty ?: intent?.qty ?: 1,
                 reason = winner?.why ?: "Best value chuna",
                 delivery = cart?.delivery ?: "jaldi",
                 visualB64 = visualB64,
+                itemPriceInr = orderPrep?.itemPriceInr,
+                deliveryFeeInr = orderPrep?.deliveryFeeInr,
+                totalInr = orderPrep?.toPayInr,
+                addressLabel = orderPrep?.address?.label,
+                addressLine = orderPrep?.address?.line,
+                onChangeAddress = vm::goAddressPicker,
                 onApprove = vm::goPay,
                 onReject = vm::goComparing,
                 onBack = vm::goComparing,
                 onVisualize = vm::visualize,     // Nano Banana product image
             )
+            Screen.Address -> AddressScreen(
+                addresses = addresses,
+                selectedId = selectedAddressId,
+                onSelect = vm::selectAddress,
+                onBack = vm::goApprove,
+            )
             Screen.Connect -> ConnectScreen(
                 connectedStores = connectedStores,
+                connecting = connecting,
                 onConnectStore = vm::startConnect,
                 onDone = vm::goHome,
                 onBack = vm::goHome,
@@ -121,9 +151,15 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 onBack = vm::goConnect,
             )
             Screen.Pay -> PayScreen(
-                amountInr = cart?.priceInr ?: winner?.priceInr ?: 0,
-                product = cart?.item ?: intent?.product ?: "Product",
-                onPay = vm::pay,                 // real backend payment (P3P/mock) → receipt
+                amountInr = orderPrep?.toPayInr ?: cart?.priceInr ?: winner?.priceInr ?: 0,
+                itemPriceInr = orderPrep?.itemPriceInr,
+                deliveryFeeInr = orderPrep?.deliveryFeeInr,
+                product = orderPrep?.product ?: cart?.item ?: intent?.product ?: "Order",
+                addressLabel = orderPrep?.address?.label,
+                addressLine = orderPrep?.address?.line,
+                awaiting = awaitingPayment,
+                onConfirm = vm::confirmOrder,     // places REAL order → opens merchant payment link
+                onPaidManually = vm::finishOrder,
                 onBack = vm::goApprove,
             )
             Screen.Success -> SuccessScreen(
@@ -135,9 +171,17 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 onDone = vm::goHome,
                 onTrack = vm::goOrders,
             )
-            Screen.Orders ->
-                if (orders.isEmpty()) OrdersScreen(onBack = vm::goHome)
-                else OrdersScreen(orders = orders, onBack = vm::goHome)
+            Screen.Orders -> OrdersScreen(orders = orders, onBack = vm::goHome)
+            Screen.Live -> LiveScreen(
+                status = liveStatus,
+                connected = liveConnected,
+                userText = liveUserText,
+                agentText = liveAgentText,
+                quotes = liveQuotes,
+                cart = liveCart,
+                cartTotal = liveCartTotal,
+                onStop = vm::stopLive,
+            )
             Screen.Profile -> ProfileScreen(
                 name = profile.name,
                 phone = profile.phone,

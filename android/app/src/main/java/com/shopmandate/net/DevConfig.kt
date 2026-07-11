@@ -10,7 +10,7 @@ import android.content.Context
 object DevConfig {
     // Physical phone → laptop LAN IP (same Wi-Fi). Change via the hidden dialog (tap logo 10×)
     // if the laptop IP changes. Emulator would use http://10.0.2.2:5055/.
-    const val DEFAULT_BASE_URL = "http://10.40.110.80:5055/"
+    const val DEFAULT_BASE_URL = "http://192.168.124.12:5055"
     private const val PREFS = "shopmandate_dev"
     private const val KEY_BASE_URL = "base_url"
 
