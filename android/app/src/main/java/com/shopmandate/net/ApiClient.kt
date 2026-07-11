@@ -50,6 +50,13 @@ object ApiClient {
         LiveCartEvent()
     }
 
+    /** Parse a {"type":"orders","orders":[...]} Live event into typed order history. */
+    fun parseOrders(text: String): List<OrderDto> = try {
+        json.decodeFromString<LiveOrdersEvent>(text).orders
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     fun create(baseUrl: String): ApiService {
         val logging = HttpLoggingInterceptor().apply {
             // BASIC, not BODY — audio/image payloads are huge base64 and BODY logging stalls the call.

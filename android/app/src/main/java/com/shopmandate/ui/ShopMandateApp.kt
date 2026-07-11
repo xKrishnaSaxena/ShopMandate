@@ -75,6 +75,7 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
     val liveQuotes by vm.liveQuotes.collectAsStateWithLifecycle()
     val liveCart by vm.liveCart.collectAsStateWithLifecycle()
     val liveCartTotal by vm.liveCartTotal.collectAsStateWithLifecycle()
+    val liveOrders by vm.liveOrders.collectAsStateWithLifecycle()
 
     BackHandler(enabled = screen != Screen.Home) { vm.goBack() }
 
@@ -180,6 +181,7 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 quotes = liveQuotes,
                 cart = liveCart,
                 cartTotal = liveCartTotal,
+                orders = liveOrders,
                 onStop = vm::stopLive,
             )
             Screen.Profile -> ProfileScreen(

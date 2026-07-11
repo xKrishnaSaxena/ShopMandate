@@ -140,6 +140,8 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
     private val _liveCartTotal = MutableStateFlow(0)
     val liveCartTotal: StateFlow<Int> = _liveCartTotal.asStateFlow()
     private val _liveCartStore = MutableStateFlow<String?>(null)   // locked merchant id ("zepto"/"instamart")
+    private val _liveOrders = MutableStateFlow<List<OrderDto>>(emptyList())   // past order/cart history
+    val liveOrders: StateFlow<List<OrderDto>> = _liveOrders.asStateFlow()
 
     fun startLive() {
         _liveConnected.value = false
@@ -150,6 +152,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         _liveCart.value = emptyList()
         _liveCartTotal.value = 0
         _liveCartStore.value = null
+        _liveOrders.value = emptyList()
         liveNewUserTurn = true
         live?.stop()
         live = LiveSession(::onLiveEvent).also {
@@ -197,6 +200,10 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
             is LiveSession.LiveEvent.Checkout -> {
                 val ev = ApiClient.parseLiveCart(e.rawJson)
                 goCartCheckout(ev.store ?: _liveCartStore.value, ev.items.ifEmpty { _liveCart.value })
+            }
+            is LiveSession.LiveEvent.Orders -> {
+                _liveOrders.value = ApiClient.parseOrders(e.rawJson)
+                _liveStatus.value = "Pichle ${_liveOrders.value.size} order"
             }
             LiveSession.LiveEvent.TurnComplete -> {
                 liveNewUserTurn = true

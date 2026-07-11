@@ -35,6 +35,7 @@ class LiveSession(private val onEvent: (LiveEvent) -> Unit) {
         data class Quotes(val rawJson: String) : LiveEvent
         data class Cart(val rawJson: String) : LiveEvent          // running multi-item cart
         data class Checkout(val rawJson: String) : LiveEvent      // agent finished → go to address/pay
+        data class Orders(val rawJson: String) : LiveEvent        // past order / cart history
         data object TurnComplete : LiveEvent
         data class Failure(val message: String) : LiveEvent
     }
@@ -97,6 +98,7 @@ class LiveSession(private val onEvent: (LiveEvent) -> Unit) {
                 "quotes" -> onEvent(LiveEvent.Quotes(text))
                 "cart" -> onEvent(LiveEvent.Cart(text))
                 "checkout" -> onEvent(LiveEvent.Checkout(text))
+                "orders" -> onEvent(LiveEvent.Orders(text))
                 "turn_complete" -> { agentSpeaking = false; onEvent(LiveEvent.TurnComplete) }
                 "error" -> onEvent(LiveEvent.Failure(o.optString("detail")))
             }

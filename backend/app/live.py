@@ -85,6 +85,16 @@ _TOOLS = [
                 ),
                 "parameters": {"type": "object", "properties": {}},
             },
+            {
+                "name": "get_order_history",
+                "description": (
+                    "Fetch the user's PAST orders (order / cart history). Call this whenever the user asks "
+                    "about previous orders or purchase history — e.g. 'cart history', 'pichla order', "
+                    "'mera order dikhao', 'last order kya tha'. Returns recent orders with product, store, "
+                    "price and date."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
         ]
     }
 ]
@@ -98,7 +108,9 @@ _SYSTEM = (
     "(3) When the user picks an item ('haan wahi', 'Zepto waala'), CALL add_to_cart, then ask 'Aur kuch chahiye?'. "
     "(4) If they name another product, CALL search_products again (it auto-limits to the same store now). "
     "(5) When they say nothing more ('bas', 'itna hi', 'nahi'), CALL checkout. "
-    "(6) Never invent prices — always use search_products. Everything from one store only. Keep every reply tiny."
+    "(6) If the user asks about past orders or cart history ('pichla order', 'cart history', 'mera order "
+    "dikhao'), CALL get_order_history and tell the latest one or two in ONE short Hinglish line. "
+    "(7) Never invent prices — always use search_products. Everything from one store only. Keep every reply tiny."
 )
 
 
@@ -242,7 +254,22 @@ async def bridge(ws) -> None:
             return types.FunctionResponse(id=fc.id, name=fc.name, response={
                 "result": f"Theek hai! {len(cart)} item, total ₹{total}. Address aur payment pe le chalta hoon."})
 
-        _DISPATCH = {"search_products": _search, "add_to_cart": _add_to_cart, "checkout": _checkout}
+        async def _order_history(fc) -> types.FunctionResponse:
+            items = orchestrator.orders().get("orders", [])
+            print(f"[live tool] get_order_history -> {len(items)} orders")
+            await ws.send_text(json.dumps({"type": "orders", "orders": items}))
+            if not items:
+                return types.FunctionResponse(id=fc.id, name=fc.name, response={
+                    "result": "Abhi tak koi pichla order nahi hai."})
+            summary = "; ".join(
+                f"{o.get('product', 'item')} — {o.get('store', '')} ₹{o.get('price_inr', 0)} ({o.get('date', '')})"
+                for o in items[:5]
+            )
+            return types.FunctionResponse(id=fc.id, name=fc.name, response={
+                "result": f"{len(items)} pichle order: {summary}"})
+
+        _DISPATCH = {"search_products": _search, "add_to_cart": _add_to_cart,
+                     "checkout": _checkout, "get_order_history": _order_history}
 
         async def _handle(r) -> None:
             if r.data:

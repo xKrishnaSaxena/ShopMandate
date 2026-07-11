@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.shopmandate.capture.WithPermission
 import com.shopmandate.net.LiveCartItem
+import com.shopmandate.net.OrderDto
 import com.shopmandate.net.Quote
 
 /**
@@ -65,13 +67,14 @@ fun LiveScreen(
     quotes: List<Quote>,
     cart: List<LiveCartItem>,
     cartTotal: Int,
+    orders: List<OrderDto>,
     onStop: () -> Unit,
 ) {
     WithPermission(
         permission = Manifest.permission.RECORD_AUDIO,
         rationale = "Live baat karne ke liye mic access chahiye.",
     ) {
-        LiveContent(status, connected, userText, agentText, quotes, cart, cartTotal, onStop)
+        LiveContent(status, connected, userText, agentText, quotes, cart, cartTotal, orders, onStop)
     }
 }
 
@@ -84,6 +87,7 @@ private fun LiveContent(
     quotes: List<Quote>,
     cart: List<LiveCartItem>,
     cartTotal: Int,
+    orders: List<OrderDto>,
     onStop: () -> Unit,
 ) {
     val pulse = rememberInfiniteTransition(label = "pulse")
@@ -166,6 +170,12 @@ private fun LiveContent(
             Spacer(Modifier.height(16.dp))
         }
 
+        // past order history — appears when the user asks "cart history" / "pichla order"
+        if (orders.isNotEmpty()) {
+            OrderHistoryBar(orders)
+            Spacer(Modifier.height(16.dp))
+        }
+
         // running cart (multi-item) — grows as the user adds things by voice
         if (cart.isNotEmpty()) {
             CartBar(cart, cartTotal)
@@ -228,6 +238,46 @@ private fun CartBar(cart: List<LiveCartItem>, total: Int) {
                 color = Color.White.copy(alpha = 0.6f),
                 fontSize = 11.sp,
             )
+        }
+    }
+}
+
+@Composable
+private fun OrderHistoryBar(orders: List<OrderDto>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White.copy(alpha = 0.16f),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.ReceiptLong, contentDescription = null, tint = Color(0xFF9DFFD4), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Pichle order · ${orders.size}", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
+            orders.take(4).forEach { o ->
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("•", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        o.product,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("₹${"%,d".format(o.priceInr)}", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
+                }
+                Text(
+                    "${o.store} · ${o.date}",
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(start = 16.dp),
+                )
+            }
         }
     }
 }
