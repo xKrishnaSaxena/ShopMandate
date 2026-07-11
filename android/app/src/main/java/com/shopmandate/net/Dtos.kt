@@ -40,6 +40,38 @@ data class StartResponse(
     val parsedIntent: Intent? = null,
     val clarifyingQuestion: String? = null,
     val reorderSuggestion: ReorderSuggestion? = null,
+    val agentOpener: String? = null,          // first agent bubble in the clarify chat
+    val suggestions: List<String> = emptyList(),
+)
+
+// ---- POST /session/{id}/chat (multi-turn clarify agent) ----
+@Serializable
+data class ChatRequest(
+    val message: String,
+    val userName: String? = null,
+)
+
+@Serializable
+data class ChatResponse(
+    val reply: String = "",
+    val parsedIntent: Intent? = null,
+    val suggestions: List<String> = emptyList(),
+    val ready: Boolean = false,
+    val showProductImage: Boolean = false,
+)
+
+// ---- POST /session/{id}/intent (tap-to-edit chips) ----
+@Serializable
+data class IntentPatchRequest(
+    val product: String? = null,
+    val budgetInr: Int? = null,
+    val qty: Int? = null,
+)
+
+@Serializable
+data class IntentPatchResponse(
+    val status: String = "",
+    val parsedIntent: Intent? = null,
 )
 
 // ---- POST /session/{id}/clarify ----
@@ -146,6 +178,11 @@ data class ConnectStartResponse(
     val status: String,
     val store: String,
     val maskedPhone: String,
+)
+
+@Serializable
+data class OAuthStartRequest(
+    val phone: String? = null,        // from Settings — pre-fills the store's OTP login
 )
 
 @Serializable

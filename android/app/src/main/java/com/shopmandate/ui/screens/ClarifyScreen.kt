@@ -3,33 +3,46 @@ package com.shopmandate.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,9 +52,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shopmandate.ChatMsg
 import com.shopmandate.ui.theme.AppBg
 import com.shopmandate.ui.theme.AppSurface
 import com.shopmandate.ui.theme.Brand
@@ -49,24 +64,31 @@ import com.shopmandate.ui.theme.Ink
 import com.shopmandate.ui.theme.InkMuted
 
 /**
- * Screen 3 — Understanding + clarifying question. Mirrors design/clarification/screen.png.
- * Shows what the agent parsed (editable chips) and asks ONE question before proceeding.
+ * Screen 3 — an interactive chat with the shopping agent. The user can type / tap
+ * quick-replies to refine intent, ask for reviews, set up recurring reorder or a
+ * price-drop auto-buy, and edit the parsed chips inline before comparing stores.
  */
 @Composable
 fun ClarifyScreen(
     product: String = "Product",
     budgetInr: Int? = null,
     qty: Int = 1,
-    question: String? = null,
+    messages: List<ChatMsg> = emptyList(),
+    suggestions: List<String> = emptyList(),
+    thinking: Boolean = false,
+    onSend: (String) -> Unit = {},
+    onEditIntent: (String?, Int?, Int?) -> Unit = { _, _, _ -> },
     onNext: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
-    var type by remember { mutableStateOf("Wireless") }
-    var budget by remember { mutableStateOf(budgetInr?.let { "₹$it" } ?: "Koi budget nahi ∞") }
+    var editing by remember { mutableStateOf(false) }
+    var input by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
 
-    // The "Wireless / Wired" chips are audio-specific — only surface them for audio products.
-    val isAudio = product.lowercase().let { p ->
-        listOf("earbud", "earphone", "headphone", "tws", "airdope", "audio", "speaker").any { it in p }
+    // Keep the newest message in view (including the typing indicator).
+    LaunchedEffect(messages.size, thinking) {
+        val count = messages.size + if (thinking) 1 else 0
+        if (count > 0) listState.animateScrollToItem(count - 1)
     }
 
     Column(
@@ -74,14 +96,13 @@ fun ClarifyScreen(
             .fillMaxSize()
             .background(AppBg)
             .systemBarsPadding()
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .imePadding(),
     ) {
         // ---- Top bar ----
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -100,190 +121,306 @@ fun ClarifyScreen(
             Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = Ink)
         }
 
-        Spacer(Modifier.height(20.dp))
-
-        // ---- Understanding card ----
+        // ---- Editable understanding chips (pinned) ----
         Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(18.dp),
             color = Brand.copy(alpha = 0.06f),
         ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "Here is what I understood so far. Tap to edit.",
-                    color = InkMuted,
-                    fontSize = 15.sp,
-                )
-                Spacer(Modifier.height(12.dp))
-                EditChip(product.ifBlank { "Product" })
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Text("Ye samajh aaya · tap to edit", color = InkMuted, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EditChip(budgetInr?.let { "Budget ₹$it" } ?: "No budget")
-                    EditChip("Qty $qty")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    EditChip(product.ifBlank { "Product" }) { editing = true }
+                    EditChip(budgetInr?.let { "₹${"%,d".format(it)}" } ?: "No budget") { editing = true }
+                    EditChip("Qty $qty") { editing = true }
                 }
             }
         }
 
-        Spacer(Modifier.height(24.dp))
-
-        // ---- Question bubble ----
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
+        // ---- Chat transcript ----
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Brand.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.SmartToy, contentDescription = null, tint = Brand, modifier = Modifier.size(20.dp))
+            itemsIndexed(messages) { _, m ->
+                if (m.role == "user") UserBubble(m) else AgentBubble(m)
             }
-            Spacer(Modifier.width(10.dp))
-            Surface(shape = RoundedCornerShape(18.dp), color = Brand.copy(alpha = 0.06f)) {
-                Text(
-                    question ?: "Thoda aur batayein — kaunsa variant chahiye?",
-                    color = Ink,
-                    fontSize = 17.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                )
+            if (thinking) {
+                item { TypingBubble() }
             }
         }
 
-        Spacer(Modifier.height(24.dp))
-
-        // ---- TYPE (audio-only variant chips) ----
-        if (isAudio) {
-            SectionLabel("TYPE")
-            Spacer(Modifier.height(8.dp))
+        // ---- Quick-reply suggestions ----
+        if (suggestions.isNotEmpty()) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ChoiceChip("Wireless", selected = type == "Wireless") { type = "Wireless" }
-                ChoiceChip("Wired bhi ok", selected = type == "Wired") { type = "Wired" }
-            }
-
-            Spacer(Modifier.height(20.dp))
-        }
-
-        // ---- ADJUST BUDGET ----
-        SectionLabel("ADJUST BUDGET")
-        Spacer(Modifier.height(8.dp))
-        val options = listOf("₹1500", "₹2000", "₹2500", "Koi budget nahi ∞")
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            options.chunked(2).forEach { pair ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    pair.forEach { label ->
-                        SelectablePill(
-                            text = label,
-                            selected = budget == label,
-                            onClick = { budget = label },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                suggestions.forEach { s ->
+                    SuggestionChip(s) { onSend(s) }
                 }
             }
         }
 
-        Spacer(Modifier.weight(1f))
-
-        // ---- Bottom: hint + CTA ----
+        // ---- Input bar ----
         Row(
-            modifier = Modifier.padding(vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Mic, contentDescription = null, tint = InkMuted, modifier = Modifier.size(18.dp))
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Message… (type karo)", color = InkMuted, fontSize = 15.sp) },
+                shape = RoundedCornerShape(24.dp),
+                maxLines = 3,
+            )
             Spacer(Modifier.width(8.dp))
-            Text("Tap or just say your choice", color = InkMuted, fontSize = 14.sp)
+            val canSend = input.isNotBlank()
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (canSend) Brand else Brand.copy(alpha = 0.3f))
+                    .clickable(enabled = canSend) {
+                        onSend(input.trim()); input = ""
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White,
+                    modifier = Modifier.size(22.dp))
+            }
         }
+
+        // ---- CTA ----
         Button(
             onClick = onNext,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp),
+                .padding(horizontal = 16.dp)
+                .height(56.dp),
             shape = RoundedCornerShape(50),
             colors = ButtonDefaults.buttonColors(containerColor = Brand),
         ) {
             Text("Aage badho  →", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(10.dp))
     }
-}
 
-@Composable
-private fun SectionLabel(text: String) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(text, color = InkMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun EditChip(text: String) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = AppSurface,
-        border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.2f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text, color = Ink, fontSize = 15.sp)
-            Spacer(Modifier.width(6.dp))
-            Icon(Icons.Filled.Edit, contentDescription = "Edit", tint = InkMuted, modifier = Modifier.size(16.dp))
-        }
-    }
-}
-
-@Composable
-private fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(50),
-        color = if (selected) Brand else Brand.copy(alpha = 0.06f),
-    ) {
-        Text(
-            text,
-            color = if (selected) Color.White else Ink,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 15.sp,
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 14.dp),
+    if (editing) {
+        EditIntentDialog(
+            product = product,
+            budgetInr = budgetInr,
+            qty = qty,
+            onDismiss = { editing = false },
+            onSave = { p, b, q -> onEditIntent(p, b, q); editing = false },
         )
     }
 }
 
 @Composable
-private fun SelectablePill(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = if (selected) Brand.copy(alpha = 0.08f) else AppSurface,
-        border = BorderStroke(
-            width = if (selected) 1.5.dp else 1.dp,
-            color = if (selected) Brand else InkMuted.copy(alpha = 0.18f),
-        ),
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text(
-                text,
-                color = if (selected) Brand else Ink,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                fontSize = 15.sp,
-            )
+private fun AgentBubble(m: ChatMsg) {
+    Row(verticalAlignment = Alignment.Top) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(Brand.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.SmartToy, contentDescription = null, tint = Brand, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Surface(
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 18.dp),
+            color = Brand.copy(alpha = 0.06f),
+            modifier = Modifier.widthIn(max = 280.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Text(m.text, color = Ink, fontSize = 16.sp)
+                m.genImageB64?.let { b64 ->
+                    decodeB64(stripDataUri(b64))?.let { img ->
+                        Spacer(Modifier.height(8.dp))
+                        Image(
+                            bitmap = img,
+                            contentDescription = "Product preview",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp)),
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
+@Composable
+private fun UserBubble(m: ChatMsg) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomEnd = 18.dp, bottomStart = 18.dp),
+            color = Brand,
+            modifier = Modifier.widthIn(max = 280.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                m.imageB64?.let { b64 ->
+                    decodeB64(stripDataUri(b64))?.let { img ->
+                        Image(
+                            bitmap = img,
+                            contentDescription = "Your photo",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+                Text(m.text, color = Color.White, fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TypingBubble() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(Brand.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.SmartToy, contentDescription = null, tint = Brand, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Surface(shape = RoundedCornerShape(18.dp), color = Brand.copy(alpha = 0.06f)) {
+            Text("soch raha hoon…", color = InkMuted, fontSize = 15.sp,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+        }
+    }
+}
+
+@Composable
+private fun SuggestionChip(text: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = AppSurface,
+        border = BorderStroke(1.dp, Brand.copy(alpha = 0.4f)),
+    ) {
+        Text(text, color = Brand, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp))
+    }
+}
+
+@Composable
+private fun EditChip(text: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = AppSurface,
+        border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.2f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text, color = Ink, fontSize = 15.sp)
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Filled.Edit, contentDescription = "Edit", tint = InkMuted, modifier = Modifier.size(15.dp))
+        }
+    }
+}
+
+@Composable
+private fun EditIntentDialog(
+    product: String,
+    budgetInr: Int?,
+    qty: Int,
+    onDismiss: () -> Unit,
+    onSave: (String?, Int?, Int?) -> Unit,
+) {
+    var p by remember { mutableStateOf(product) }
+    var b by remember { mutableStateOf(budgetInr?.toString() ?: "") }
+    var q by remember { mutableStateOf(qty.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(
+                    p.trim().ifBlank { product },
+                    b.trim().toIntOrNull(),                 // blank → null → "No budget"
+                    q.trim().toIntOrNull()?.coerceAtLeast(1) ?: 1,
+                )
+            }) { Text("Save", color = Brand, fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = InkMuted) } },
+        title = { Text("Edit details", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = p, onValueChange = { p = it },
+                    label = { Text("Product") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = b, onValueChange = { b = it.filter(Char::isDigit) },
+                    label = { Text("Budget ₹ (khaali = koi budget nahi)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = q, onValueChange = { q = it.filter(Char::isDigit) },
+                    label = { Text("Quantity") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+    )
+}
+
+/** Strip an optional `data:<mime>;base64,` prefix so BitmapFactory gets raw base64. */
+private fun stripDataUri(b64: String): String =
+    if (b64.startsWith("data:")) b64.substringAfter(",", b64) else b64
+
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun ClarifyScreenPreview() {
-    ClarifyScreen()
+    ClarifyScreen(
+        product = "Wireless earbuds",
+        budgetInr = 2000,
+        qty = 1,
+        messages = listOf(
+            ChatMsg("user", "earbuds chahiye 2000 ke andar"),
+            ChatMsg("agent", "Samajh gaya! Gaming ke liye chahiye ya calls ke liye?"),
+        ),
+        suggestions = listOf("Log kya bolte hain? ⭐", "Sasta similar", "Har hafte mangwa do 🔁"),
+    )
 }

@@ -22,9 +22,12 @@ import base64  # noqa: E402
 
 from . import gemini  # noqa: E402
 from .models import (  # noqa: E402
+    ChatReq,
     ClarifyReq,
     ConnectStartReq,
     ConnectVerifyReq,
+    IntentPatchReq,
+    OAuthStartReq,
     PayReq,
     SayReq,
     StartReq,
@@ -74,6 +77,18 @@ def session_clarify(sid: str, req: ClarifyReq) -> dict:
     return _session(lambda: orchestrator.clarify(sid, req))
 
 
+@app.post("/api/session/{sid}/chat")
+def session_chat(sid: str, req: ChatReq) -> dict:
+    """One multi-turn clarify-chat message → agent reply + updated intent + quick-replies."""
+    return _session(lambda: orchestrator.chat(sid, req.message, req.user_name))
+
+
+@app.post("/api/session/{sid}/intent")
+def session_patch_intent(sid: str, req: IntentPatchReq) -> dict:
+    """Tap-to-edit chips patch the parsed intent directly (product / budget / qty)."""
+    return _session(lambda: orchestrator.patch_intent(sid, req.model_dump()))
+
+
 @app.post("/api/session/{sid}/search")
 async def session_search(sid: str) -> dict:
     try:
@@ -100,8 +115,8 @@ def store_connect_verify(store: str, req: ConnectVerifyReq) -> dict:
 
 # ---- app-driven browser OAuth (phone opens the real consent page) ----
 @app.post("/api/connect/{store}/oauth/start")
-async def store_oauth_start(store: str) -> dict:
-    return await orchestrator.oauth_start(store)
+async def store_oauth_start(store: str, req: OAuthStartReq | None = None) -> dict:
+    return await orchestrator.oauth_start(store, req.phone if req else None)
 
 
 @app.get("/api/connect/{store}/status")

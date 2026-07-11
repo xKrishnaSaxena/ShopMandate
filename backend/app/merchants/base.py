@@ -131,27 +131,36 @@ class RealMerchant(Merchant):
                 return None
         return (v / 100) if self.price_in_paise else float(v)
 
-    async def _ensure_address(self, tools: list[str]) -> None:
+    async def _ensure_address(self, tools: list[str]) -> str | None:
+        """Pick the first saved address. Zepto needs it *selected* (select_saved_address);
+        Instamart needs the id passed into search_products. Returns the address id (or None)."""
         addr_tool = _find_tool(tools, ["list_saved_addresses", "get_addresses", "list_addresses"])
-        sel_tool = _find_tool(tools, ["select_saved_address", "select_address"])
         if not addr_tool:
-            return
+            return None
         addrs = _as_list(await self.mcp.call(addr_tool, {}), ["addresses", "data", "result"])
-        if addrs and sel_tool:
-            aid = _first(addrs[0], ["id", "addressId", "address_id"])
-            if aid:
-                await self.mcp.call(sel_tool, {"addressId": aid})
+        if not addrs:
+            return None
+        aid = _first(addrs[0], ["id", "addressId", "address_id"])
+        sel_tool = _find_tool(tools, ["select_saved_address", "select_address"])
+        if aid and sel_tool:
+            await self.mcp.call(sel_tool, {"addressId": aid})
+        return aid if isinstance(aid, str) else None
 
     async def search(self, query: str, budget: int | None) -> Quote | None:
         if not self.connected():
             return None  # not linked yet — skip (connect explicitly via /connect, no OAuth popup mid-search)
         tools = await self.tools()
-        await self._ensure_address(tools)
+        aid = await self._ensure_address(tools)
         search_tool = _find_tool(tools, ["search_products", "search_multiple", "search"],
                                  avoid=["restaurant", "menu"])
         if not search_tool:
             return None
-        res = await self.mcp.call(search_tool, {"query": query})
+        # Instamart's search_products REQUIRES the addressId inline (Zepto takes just the query,
+        # and selects the address separately) — without it Instamart returns 0 products.
+        args = {"query": query}
+        if aid and self.id == "instamart":
+            args["addressId"] = aid
+        res = await self.mcp.call(search_tool, args)
         products = _as_list(res, ["products", "results", "items", "data"])
         best: tuple[dict, float] | None = None
         for p in products:

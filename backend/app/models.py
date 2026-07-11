@@ -62,14 +62,30 @@ class StartReq(BaseModel):
     image_b64: str | None = None
     text: str | None = None
     language_hint: Language | None = None
+    user_name: str | None = None
 
 
 class ClarifyReq(BaseModel):
     answers: dict[str, object]
 
 
+class ChatReq(BaseModel):
+    message: str
+    user_name: str | None = None
+
+
+class IntentPatchReq(BaseModel):
+    product: str | None = None
+    budget_inr: int | None = None
+    qty: int | None = None
+
+
 class ConnectStartReq(BaseModel):
     phone: str
+
+
+class OAuthStartReq(BaseModel):
+    phone: str | None = None   # from Settings — pre-fills the store's OTP login (login_hint)
 
 
 class ConnectVerifyReq(BaseModel):

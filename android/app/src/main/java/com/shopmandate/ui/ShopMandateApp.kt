@@ -55,6 +55,9 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
 
     val intent by vm.intent.collectAsStateWithLifecycle()
     val clarifyQuestion by vm.clarifyQuestion.collectAsStateWithLifecycle()
+    val chatMessages by vm.chat.collectAsStateWithLifecycle()
+    val chatSuggestions by vm.suggestions.collectAsStateWithLifecycle()
+    val chatThinking by vm.chatThinking.collectAsStateWithLifecycle()
     val quotes by vm.quotes.collectAsStateWithLifecycle()
     val winner by vm.winner.collectAsStateWithLifecycle()
     val cart by vm.cart.collectAsStateWithLifecycle()
@@ -100,7 +103,11 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 product = intent?.product ?: "Product",
                 budgetInr = intent?.budgetInr,
                 qty = intent?.qty ?: 1,
-                question = clarifyQuestion,
+                messages = chatMessages,
+                suggestions = chatSuggestions,
+                thinking = chatThinking,
+                onSend = vm::sendChat,           // typed message / tapped quick-reply
+                onEditIntent = vm::editIntent,   // tap-to-edit chips
                 onNext = vm::search,             // "Aage badho" → real store search
                 onBack = vm::goBack,
             )
@@ -116,11 +123,10 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
             Screen.Approve -> ApproveScreen(
                 productName = orderPrep?.product ?: cart?.item ?: intent?.product ?: "Product",
                 subtitle = buildSubtitle(cart?.color, cart?.warranty),
-                priceInr = cart?.priceInr ?: winner?.priceInr ?: 0,
+                priceInr = orderPrep?.itemPriceInr ?: orderPrep?.toPayInr ?: cart?.priceInr ?: winner?.priceInr ?: 0,
                 qty = orderPrep?.qty ?: cart?.qty ?: intent?.qty ?: 1,
                 reason = winner?.why ?: "Best value chuna",
                 delivery = cart?.delivery ?: "jaldi",
-                visualB64 = visualB64,
                 itemPriceInr = orderPrep?.itemPriceInr,
                 deliveryFeeInr = orderPrep?.deliveryFeeInr,
                 totalInr = orderPrep?.toPayInr,
@@ -130,7 +136,6 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 onApprove = vm::goPay,
                 onReject = vm::goComparing,
                 onBack = vm::goComparing,
-                onVisualize = vm::visualize,     // Nano Banana product image
             )
             Screen.Address -> AddressScreen(
                 addresses = addresses,

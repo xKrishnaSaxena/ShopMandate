@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import random
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -177,10 +178,13 @@ class MCPMerchant:
     def connected(self) -> bool:
         return self.storage.has_token()
 
-    async def _retry(self, fn, tries: int = 3):
-        """Run an MCP action, retrying on HTTP 429 with exponential backoff. The MCP client
-        raises inside an anyio TaskGroup, so a 429 surfaces as an ExceptionGroup — unwrap it
-        and, if it never clears, raise ONE clean message instead of the opaque TaskGroup text."""
+    async def _retry(self, fn, tries: int = 6):
+        """Run an MCP action, retrying on HTTP 429 with exponential backoff + jitter. The MCP
+        client raises inside an anyio TaskGroup, so a 429 surfaces as an ExceptionGroup — unwrap
+        it and, if it never clears, raise ONE clean message instead of the opaque TaskGroup text.
+
+        6 tries with capped backoff (~1,2,4,6,6s + jitter ≈ up to ~20s) — enough for a payment
+        confirm to ride out a transient store rate-limit instead of failing the whole order."""
         delay = 1.0
         for i in range(tries):
             try:
@@ -188,8 +192,8 @@ class MCPMerchant:
             except BaseException as e:  # noqa: BLE001 — includes the TaskGroup ExceptionGroup
                 if _has_429(e):
                     if i < tries - 1:
-                        await asyncio.sleep(delay)
-                        delay *= 2
+                        await asyncio.sleep(delay + random.uniform(0, 0.5))  # jitter: de-sync parallel retries
+                        delay = min(delay * 2, 6.0)
                         continue
                     raise RuntimeError("store abhi busy hai (rate limit) — thodi der baad try karo") from e
                 raise

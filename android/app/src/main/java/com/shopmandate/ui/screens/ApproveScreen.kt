@@ -1,8 +1,8 @@
 package com.shopmandate.ui.screens
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,13 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
@@ -33,12 +32,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -52,8 +49,8 @@ import com.shopmandate.ui.theme.Ink
 import com.shopmandate.ui.theme.InkMuted
 
 /**
- * Screen 5 — Approve cart. Mirrors design/approve_pay/screen.png.
- * The user sees EXACTLY what they're buying + why Store B, then approves.
+ * Screen 5 — Approve cart. The user sees EXACTLY what they're buying + why, then approves.
+ * Content scrolls; the Pay CTA stays pinned at the bottom so it's always reachable.
  */
 @Composable
 fun ApproveScreen(
@@ -63,7 +60,6 @@ fun ApproveScreen(
     qty: Int = 1,
     reason: String = "Store B chuna — ₹150 sasta + jaldi delivery",
     delivery: String = "kal shaam tak",
-    visualB64: String? = null,
     itemPriceInr: Int? = null,
     deliveryFeeInr: Int? = null,
     totalInr: Int? = null,
@@ -73,11 +69,9 @@ fun ApproveScreen(
     onApprove: () -> Unit = {},
     onReject: () -> Unit = {},
     onBack: () -> Unit = {},
-    onVisualize: () -> Unit = {},
 ) {
     val priceText = "₹${"%,d".format(priceInr)}"
     val payText = "₹${"%,d".format(totalInr ?: priceInr)}"
-    val visual = remember(visualB64) { visualB64?.let { decodeB64(it) } }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -86,7 +80,7 @@ fun ApproveScreen(
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // ---- Top bar ----
+        // ---- Top bar (fixed) ----
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -105,55 +99,28 @@ fun ApproveScreen(
             Icon(Icons.Filled.Settings, contentDescription = null, tint = Ink, modifier = Modifier.size(22.dp))
         }
 
-        Spacer(Modifier.height(20.dp))
-        Text("Please confirm", color = Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
-        Spacer(Modifier.height(4.dp))
-        Text("Review your selection before paying.", color = InkMuted, fontSize = 15.sp, textAlign = TextAlign.Center)
-
-        Spacer(Modifier.height(20.dp))
-
-        // ---- Hero product card ----
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            color = AppSurface,
-            border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.10f)),
+        // ---- Scrollable content ----
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .background(Brand.copy(alpha = 0.05f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (visual != null) {
-                        Image(
-                            bitmap = visual,
-                            contentDescription = productName,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Icon(Icons.Filled.Headphones, contentDescription = null, tint = InkMuted.copy(alpha = 0.5f), modifier = Modifier.size(64.dp))
-                    }
-                    // ✨ Nano-Banana "dekho kaisa lagega" (bottom-right chip)
-                    Surface(
-                        onClick = onVisualize,
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
-                        shape = RoundedCornerShape(50),
-                        color = Color.White.copy(alpha = 0.92f),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Cta, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Dekho kaisa lagega", color = Cta, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                        }
-                    }
-                }
+            Spacer(Modifier.height(20.dp))
+            Text("Please confirm", color = Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Review your selection before paying.", color = InkMuted, fontSize = 15.sp, textAlign = TextAlign.Center)
+
+            Spacer(Modifier.height(20.dp))
+
+            // ---- Product info card (text only) ----
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = AppSurface,
+                border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.10f)),
+            ) {
                 Column(Modifier.padding(20.dp)) {
                     Text(productName, color = Ink, fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp)
                     Spacer(Modifier.height(6.dp))
@@ -168,78 +135,78 @@ fun ApproveScreen(
                     }
                 }
             }
-        }
 
-        Spacer(Modifier.height(16.dp))
-
-        // ---- Reason strip ----
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = Cta.copy(alpha = 0.08f),
-        ) {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-                Icon(Icons.Filled.Verified, contentDescription = null, tint = Cta, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(reason, color = Cta, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 20.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.LocalShipping, contentDescription = null, tint = Cta, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Delivery: $delivery", color = Cta, fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-
-        // ---- Bill breakdown (transparent: item + delivery = total) ----
-        if (itemPriceInr != null && deliveryFeeInr != null) {
             Spacer(Modifier.height(16.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = AppSurface,
-                border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.10f)),
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    BillRow("Item total", "₹$itemPriceInr")
-                    Spacer(Modifier.height(8.dp))
-                    BillRow("Delivery fee", "₹$deliveryFeeInr")
-                    Spacer(Modifier.height(10.dp))
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(InkMuted.copy(alpha = 0.12f)))
-                    Spacer(Modifier.height(10.dp))
-                    BillRow("To pay", payText, bold = true)
-                }
-            }
-        }
 
-        // ---- Delivery address ----
-        if (addressLine != null) {
-            Spacer(Modifier.height(12.dp))
+            // ---- Reason strip ----
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                color = Brand.copy(alpha = 0.05f),
+                color = Cta.copy(alpha = 0.08f),
             ) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Filled.Place, contentDescription = null, tint = Brand, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.Verified, contentDescription = null, tint = Cta, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Deliver to" + (addressLabel?.let { " · $it" } ?: ""), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Spacer(Modifier.height(2.dp))
-                        Text(addressLine, color = InkMuted, fontSize = 12.sp, lineHeight = 16.sp)
-                    }
-                    TextButton(onClick = onChangeAddress) {
-                        Text("Change", color = Brand, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Column {
+                        Text(reason, color = Cta, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 20.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.LocalShipping, contentDescription = null, tint = Cta, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Delivery: $delivery", color = Cta, fontSize = 13.sp)
+                        }
                     }
                 }
             }
+
+            // ---- Bill breakdown (transparent: item + delivery = total) ----
+            if (itemPriceInr != null && deliveryFeeInr != null) {
+                Spacer(Modifier.height(16.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = AppSurface,
+                    border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.10f)),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        BillRow("Item total", "₹$itemPriceInr")
+                        Spacer(Modifier.height(8.dp))
+                        BillRow("Delivery fee", "₹$deliveryFeeInr")
+                        Spacer(Modifier.height(10.dp))
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(InkMuted.copy(alpha = 0.12f)))
+                        Spacer(Modifier.height(10.dp))
+                        BillRow("To pay", payText, bold = true)
+                    }
+                }
+            }
+
+            // ---- Delivery address ----
+            if (addressLine != null) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Brand.copy(alpha = 0.05f),
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                        Icon(Icons.Filled.Place, contentDescription = null, tint = Brand, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Deliver to" + (addressLabel?.let { " · $it" } ?: ""), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Spacer(Modifier.height(2.dp))
+                            Text(addressLine, color = InkMuted, fontSize = 12.sp, lineHeight = 16.sp)
+                        }
+                        TextButton(onClick = onChangeAddress) {
+                            Text("Change", color = Brand, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
 
-        Spacer(Modifier.weight(1f))
-
-        // ---- CTA ----
+        // ---- CTA (fixed at bottom) ----
         Button(
             onClick = onApprove,
             modifier = Modifier
@@ -266,12 +233,12 @@ private fun BillRow(label: String, value: String, bold: Boolean = false) {
         Text(label, color = if (bold) Ink else InkMuted, fontSize = if (bold) 16.sp else 14.sp,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
         Spacer(Modifier.weight(1f))
-        Text(value, color = if (bold) Ink else Ink, fontSize = if (bold) 18.sp else 14.sp,
+        Text(value, color = Ink, fontSize = if (bold) 18.sp else 14.sp,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium)
     }
 }
 
-/** Decode a base64 PNG/JPEG into a Compose ImageBitmap (best-effort). */
+/** Decode a base64 PNG/JPEG into a Compose ImageBitmap (best-effort). Shared with ClarifyScreen. */
 internal fun decodeB64(b64: String): androidx.compose.ui.graphics.ImageBitmap? = try {
     val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
     android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()

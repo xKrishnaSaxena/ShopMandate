@@ -117,6 +117,75 @@ def extract_intent_from_audio(audio_b64: str, language_hint: str | None) -> Inte
     return _parsed(resp)
 
 
+class ChatReply(BaseModel):
+    """One conversational turn from the clarify-chat agent (structured)."""
+
+    reply: str = ""                       # 1-2 short Hinglish sentences
+    product: str | None = None            # updated only if the user changed it
+    budget_inr: int | None = None
+    qty: int | None = None
+    constraints: list[str] = []           # FULL updated list (not a delta)
+    suggestions: list[str] = []           # 2-4 very short tappable quick-replies
+    ready_to_search: bool = False         # user signalled "let's proceed"
+    show_product_image: bool = False      # user asked to see / visualize the product
+
+
+CHAT_SYSTEM = (
+    "You are ShopMandate's shopping assistant for Indian users — warm, quick, and "
+    "conversational in Hinglish (Roman Hindi + English). NEVER robotic, never long. "
+    "You are helping the user lock down WHAT to buy before the app makes stores compete on price.\n\n"
+    "You can, contextually:\n"
+    "1. Refine product, budget (₹ INR), quantity and constraints from what the user says.\n"
+    "2. REVIEWS: when asked 'log kya bolte hain' / reviews / ratings, give ONE punchy honest "
+    "Hinglish line with a star rating and the real trade-off, e.g. '4.2⭐ · sound accha, mic "
+    "average, battery solid'. Base it on typical real-world sentiment for such a product.\n"
+    "3. SMART SUBSTITUTION: if an item may be costly or out of stock, proactively suggest a "
+    "cheaper/similar alternative and ask if it's OK — e.g. 'wo mehnga hai, ye ₹50 sasta similar "
+    "hai — theek?'. If the user agrees, update product to the alternative.\n"
+    "4. RECURRING / SUBSCRIPTION reorder ('har hafte doodh-atta mangwa do'): confirm the cadence "
+    "in your reply and add a constraint like 'subscription:weekly'.\n"
+    "5. PRICE-DROP / RESTOCK AUTO-BUY ('earbuds ₹1500 ho jaye to auto-buy'): confirm the cap in "
+    "your reply and add a constraint like 'autobuy<=1500'.\n\n"
+    "RULES:\n"
+    "- Reply in 1-2 short Hinglish sentences. Emojis sparingly (0-1).\n"
+    "- Update product/budget_inr/qty ONLY when the user clearly changes them; otherwise leave them "
+    "null so the existing value is kept.\n"
+    "- constraints: return the FULL updated list (keep existing ones, add new).\n"
+    "- suggestions: 2-4 VERY short (2-4 words) tappable Hinglish quick-replies the user might tap "
+    "next. Make them contextual — mix feature actions ('Log kya bolte hain?', 'Sasta similar', "
+    "'Har hafte mangwa do', 'Price gire to lelo') with the obvious next step ('Aage badho').\n"
+    "- Set ready_to_search=true when the user signals they are done / says proceed / 'aage badho'.\n"
+    "- Set show_product_image=true only if the user asks to SEE or visualize the product."
+)
+
+
+def chat_turn(intent: Intent, history: list[dict], message: str, user_name: str | None) -> "ChatReply":
+    """One clarify-chat turn: read the intent + short history, return reply + intent updates."""
+    convo = "\n".join(f"{h.get('role')}: {h.get('text')}" for h in history[-8:])
+    ctx = (
+        f"User's name: {user_name or 'dost'}\n"
+        f"Current understanding — product: {intent.product or '?'}; "
+        f"budget_inr: {intent.budget_inr if intent.budget_inr is not None else 'none'}; "
+        f"qty: {intent.qty}; constraints: {intent.constraints}\n\n"
+        f"Conversation so far:\n{convo or '(none)'}\n\n"
+        f"User's new message: {message}"
+    )
+    resp = client().models.generate_content(
+        model=FLASH_MODEL,
+        contents=ctx,
+        config=types.GenerateContentConfig(
+            system_instruction=CHAT_SYSTEM,
+            response_mime_type="application/json",
+            response_schema=ChatReply,
+            temperature=0.5,
+        ),
+    )
+    r = resp.parsed
+    if not isinstance(r, ChatReply):
+        r = ChatReply.model_validate_json(resp.text or "{}")
+    return r
+
+
 def value_note(summary: str) -> str:
     """Deep-research-lite: a short Hinglish 'why this is the best value' line for the winning quote."""
     resp = client().models.generate_content(

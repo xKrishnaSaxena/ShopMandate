@@ -12,12 +12,15 @@ import com.shopmandate.capture.LiveSession
 import com.shopmandate.net.ApiClient
 import com.shopmandate.net.ApiService
 import com.shopmandate.net.Cart
+import com.shopmandate.net.ChatRequest
 import com.shopmandate.net.ClarifyAnswers
 import com.shopmandate.net.ClarifyRequest
+import com.shopmandate.net.IntentPatchRequest
 import com.shopmandate.net.ConnectStartRequest
 import com.shopmandate.net.ConnectVerifyRequest
 import com.shopmandate.net.Intent
 import com.shopmandate.net.OAuthCompleteRequest
+import com.shopmandate.net.OAuthStartRequest
 import com.shopmandate.net.AddressDto
 import com.shopmandate.net.CartLineRequest
 import com.shopmandate.net.LiveCartItem
@@ -64,6 +67,18 @@ sealed interface Screen {
 
 data class UserProfile(val name: String, val phone: String)
 
+/** One bubble in the Clarify chat. */
+data class ChatMsg(
+    val role: String,                 // "user" | "agent"
+    val text: String,
+    val imageB64: String? = null,     // user-attached photo (image start)
+    val genImageB64: String? = null,  // agent-generated product visual (Nano Banana)
+)
+
+private val DEFAULT_SUGGESTIONS = listOf(
+    "Log kya bolte hain? ⭐", "Sasta similar dikhao", "Har hafte mangwa do 🔁", "Price gire to lelo 🔔",
+)
+
 class ShopViewModel(app: Application) : AndroidViewModel(app) {
 
     private var api: ApiService = ApiClient.create(getApplication())
@@ -100,6 +115,16 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
     val transcript: StateFlow<String?> = _transcript.asStateFlow()
     private val _clarifyQuestion = MutableStateFlow<String?>(null)
     val clarifyQuestion: StateFlow<String?> = _clarifyQuestion.asStateFlow()
+    // ---- clarify chat ----
+    private val _chat = MutableStateFlow<List<ChatMsg>>(emptyList())
+    val chat: StateFlow<List<ChatMsg>> = _chat.asStateFlow()
+    private val _suggestions = MutableStateFlow<List<String>>(emptyList())
+    val suggestions: StateFlow<List<String>> = _suggestions.asStateFlow()
+    private val _chatThinking = MutableStateFlow(false)
+    val chatThinking: StateFlow<Boolean> = _chatThinking.asStateFlow()
+    // the raw input that opened this session (seeds the first user bubble)
+    private var pendingUserText: String? = null
+    private var pendingUserImageB64: String? = null
     private val _quotes = MutableStateFlow<List<Quote>>(emptyList())
     val quotes: StateFlow<List<Quote>> = _quotes.asStateFlow()
     private val _winner = MutableStateFlow<Winner?>(null)
@@ -273,12 +298,14 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- backend flow ----
     fun startText(text: String) = job("Samajh raha hoon…") {
+        pendingUserText = text; pendingUserImageB64 = null
         applyStart(api.start(StartRequest(inputType = "text", text = text, userName = _profile.value.name)))
     }
 
     fun onAudioCaptured(b64: String) {
         if (b64.isBlank()) { _error.value = "Recording nahi hui — mic permission check karo"; return }
         capturedAudioB64 = b64
+        pendingUserText = null; pendingUserImageB64 = null   // transcript seeds the bubble
         // Tell Gemini the real format (raw AAC), else it defaults to audio/wav and misreads.
         val payload = if (b64.startsWith("data:")) b64 else "data:audio/aac;base64,$b64"
         job("Sun raha hoon…") {
@@ -290,6 +317,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         if (b64.isBlank()) { _error.value = "Photo capture nahi hui"; return }
         capturedImageB64 = b64
         val payload = if (b64.startsWith("data:")) b64 else "data:image/jpeg;base64,$b64"
+        pendingUserText = null; pendingUserImageB64 = payload   // show the photo in the chat
         job("Dekh raha hoon…") {
             applyStart(api.start(StartRequest(inputType = "photo", imageB64 = payload, userName = _profile.value.name)))
         }
@@ -300,7 +328,68 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         _intent.value = r.parsedIntent
         _transcript.value = r.transcript
         _clarifyQuestion.value = r.clarifyingQuestion
-        _screen.value = Screen.Clarify   // Clarify screen shows parsed intent + (if any) the question
+
+        // Seed the Clarify chat: user's opening input, then the agent's first line.
+        val msgs = mutableListOf<ChatMsg>()
+        val userText = pendingUserText ?: r.transcript?.takeIf { it.isNotBlank() }
+        if (userText != null || pendingUserImageB64 != null) {
+            msgs += ChatMsg(role = "user", text = userText ?: "Ye chahiye 👇", imageB64 = pendingUserImageB64)
+        }
+        val opener = r.agentOpener ?: r.clarifyingQuestion
+            ?: "Samajh gaya! Kuch aur batana hai ya seedha aage badhein?"
+        msgs += ChatMsg(role = "agent", text = opener)
+        _chat.value = msgs
+        _suggestions.value = r.suggestions.ifEmpty { DEFAULT_SUGGESTIONS }
+        _chatThinking.value = false
+        pendingUserText = null; pendingUserImageB64 = null
+        _screen.value = Screen.Clarify   // Clarify screen = interactive chat with the agent
+    }
+
+    /** Send a chat message (typed or a tapped suggestion) to the clarify agent. */
+    fun sendChat(text: String) {
+        val msg = text.trim()
+        if (msg.isBlank()) return
+        val id = sessionId ?: return
+        _chat.value = _chat.value + ChatMsg(role = "user", text = msg)
+        _suggestions.value = emptyList()
+        _chatThinking.value = true
+        job(null) {
+            try {
+                val r = api.chat(id, ChatRequest(message = msg, userName = _profile.value.name))
+                r.parsedIntent?.let { _intent.value = it }
+                _chat.value = _chat.value + ChatMsg(role = "agent", text = r.reply.ifBlank { "Theek hai!" })
+                _suggestions.value = r.suggestions.ifEmpty { DEFAULT_SUGGESTIONS }
+                if (r.showProductImage) visualizeIntoChat()
+            } finally {
+                _chatThinking.value = false
+            }
+        }
+    }
+
+    /** Tap-to-edit chips: patch product / budget / qty on the intent. budgetInr=null clears the budget. */
+    fun editIntent(product: String?, budgetInr: Int?, qty: Int?) {
+        val cur = _intent.value
+        _intent.value = (cur ?: Intent()).copy(
+            product = product ?: cur?.product ?: "",
+            budgetInr = budgetInr,
+            qty = qty ?: cur?.qty ?: 1,
+        )
+        val id = sessionId ?: return
+        job(null) {
+            val r = api.patchIntent(id, IntentPatchRequest(product = product, budgetInr = budgetInr, qty = qty))
+            r.parsedIntent?.let { _intent.value = it }
+        }
+    }
+
+    /** Generate a Nano-Banana product visual and drop it into the chat as an agent bubble. */
+    private fun visualizeIntoChat() {
+        val product = _intent.value?.product ?: _cart.value?.item ?: return
+        viewModelScope.launch {
+            try {
+                val img = api.visualize(VisualizeRequest(product = product)).imageB64
+                _chat.value = _chat.value + ChatMsg(role = "agent", text = "Aisa dikhega 👇", genImageB64 = img)
+            } catch (_: Exception) { /* image is best-effort */ }
+        }
     }
 
     fun clarify(type: String?, budgetInr: Int?) = job("…") {
@@ -330,7 +419,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         _error.value = null
         viewModelScope.launch {
             try {
-                val r = api.oauthStart(store)
+                val r = api.oauthStart(store, OAuthStartRequest(phone = _profile.value.phone))
                 if (r.status == "connected") {
                     _connectedStores.value = r.connectedStores.toSet()
                     _connecting.value = null

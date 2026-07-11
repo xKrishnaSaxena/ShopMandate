@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from . import connect, gemini, negotiation, payment
 from .merchants import ordering, registry
@@ -27,6 +28,7 @@ class Session:
     intent: Intent | None = None
     decision: Decision | None = None
     connected: bool = False
+    history: list[dict] = field(default_factory=list)   # clarify-chat turns: {role, text}
 
 
 SESSIONS: dict[str, Session] = {}
@@ -57,6 +59,30 @@ def _needs_clarification(i: Intent) -> bool:
     return bool(i.needs_clarification) and (not i.product or i.budget_inr is None)
 
 
+def _default_suggestions(i: Intent) -> list[str]:
+    """Feature-forward quick-reply chips shown under the agent's message."""
+    chips: list[str] = []
+    if i.budget_inr is None:
+        chips.append("Budget ₹1500 rakho")
+    chips += [
+        "Log kya bolte hain? ⭐",
+        "Sasta similar dikhao",
+        "Har hafte mangwa do 🔁",
+        "Price gire to lelo 🔔",
+    ]
+    return chips[:4]
+
+
+def _opener(i: Intent, clarify_needed: bool, user_name: str | None) -> str:
+    """First agent bubble on the Clarify chat screen."""
+    if clarify_needed and i.clarifying_question:
+        return i.clarifying_question
+    name = (user_name or "").split(" ")[0]
+    hi = f"{name}, " if name else ""
+    prod = i.product or "ye"
+    return f"{hi}samajh gaya — {prod} chahiye. Kuch aur batana hai ya aage badhein?"
+
+
 # ---- §8.1 start ----
 def start(req: StartReq) -> dict:
     if req.input_type == "voice" and req.audio_b64:
@@ -67,15 +93,75 @@ def start(req: StartReq) -> dict:
         intent = gemini.extract_intent_from_text(req.text or "", req.language_hint)
 
     sid = str(uuid.uuid4())
-    SESSIONS[sid] = Session(id=sid, intent=intent)
+    session = Session(id=sid, intent=intent)
     clarify_needed = _needs_clarification(intent)
+    opener = _opener(intent, clarify_needed, req.user_name)
+    session.history.append({"role": "agent", "text": opener})
+    SESSIONS[sid] = session
     return {
         "session_id": sid,
         "status": "need_clarification" if clarify_needed else "intent_ready",
         "transcript": intent.transcript,
         "parsed_intent": _intent_public(intent),
         "clarifying_question": intent.clarifying_question if clarify_needed else None,
+        "agent_opener": opener,
+        "suggestions": _default_suggestions(intent),
     }
+
+
+# ---- clarify-chat (multi-turn agent) ----
+def chat(session_id: str, message: str, user_name: str | None) -> dict:
+    """One conversational turn. Reads intent + short history, returns reply + intent updates."""
+    s = _get(session_id)
+    i = s.intent or Intent()
+    s.history.append({"role": "user", "text": message})
+    try:
+        r = gemini.chat_turn(i, s.history, message, user_name)
+    except Exception as e:  # never break the chat on a model hiccup
+        print(f"[chat] {e}")
+        reply = "Thoda phir se bolo — main sun raha hoon."
+        s.history.append({"role": "agent", "text": reply})
+        return {"reply": reply, "parsed_intent": _intent_public(i),
+                "suggestions": _default_suggestions(i), "ready": False,
+                "show_product_image": False}
+
+    if r.product:
+        i.product = r.product
+    if r.budget_inr is not None:
+        i.budget_inr = r.budget_inr
+    if r.qty is not None and r.qty > 0:
+        i.qty = r.qty
+    if r.constraints:
+        i.constraints = r.constraints
+    if r.ready_to_search:
+        i.needs_clarification = False
+    s.intent = i
+    s.history.append({"role": "agent", "text": r.reply})
+    return {
+        "reply": r.reply,
+        "parsed_intent": _intent_public(i),
+        "suggestions": r.suggestions or _default_suggestions(i),
+        "ready": r.ready_to_search,
+        "show_product_image": r.show_product_image,
+    }
+
+
+def patch_intent(session_id: str, patch: dict) -> dict:
+    """Direct edit of the parsed intent from the tap-to-edit chips (product / budget / qty)."""
+    s = _get(session_id)
+    i = s.intent or Intent()
+    if patch.get("product"):
+        i.product = str(patch["product"]).strip()
+    if "budget_inr" in patch:                       # None = user cleared the budget
+        b = patch["budget_inr"]
+        i.budget_inr = int(b) if b is not None else None
+    if patch.get("qty") is not None:
+        try:
+            i.qty = max(1, int(patch["qty"]))
+        except (TypeError, ValueError):
+            pass
+    s.intent = i
+    return {"status": "ok", "parsed_intent": _intent_public(i)}
 
 
 # ---- §8.2 clarify ----
@@ -333,7 +419,20 @@ def store_connect_verify(store: str, otp: str) -> dict:
 
 
 # ---- app-driven browser OAuth (phone opens the real consent URL) ----
-async def oauth_start(store: str) -> dict:
+def _with_login_hint(url: str, phone: str | None) -> str:
+    """Attach the user's phone (from Settings) to the store's OAuth login page as a
+    standard OIDC `login_hint`, so the store pre-fills that number for the OTP. Unknown
+    params are ignored by OAuth servers, so this is safe even if the store doesn't use it."""
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())[-10:]
+    if len(digits) != 10:
+        return url
+    parsed = urlparse(url)
+    q = dict(parse_qsl(parsed.query))
+    q.setdefault("login_hint", digits)
+    return urlunparse(parsed._replace(query=urlencode(q)))
+
+
+async def oauth_start(store: str, phone: str | None = None) -> dict:
     m = registry.by_id(store)
     if not m or not getattr(m, "real", False):
         return {"status": "unknown_or_mock", "store": store}
@@ -364,7 +463,7 @@ async def oauth_start(store: str) -> dict:
         url = await asyncio.wait_for(url_fut, timeout=30)
     except Exception as e:
         return {"status": "error", "store": store, "detail": str(e)}
-    return {"status": "auth_required", "store": store, "auth_url": url}
+    return {"status": "auth_required", "store": store, "auth_url": _with_login_hint(url, phone)}
 
 
 def oauth_status(store: str) -> dict:

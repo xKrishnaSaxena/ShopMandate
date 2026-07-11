@@ -14,6 +14,12 @@ interface ApiService {
     @POST("api/session/{id}/clarify")
     suspend fun clarify(@Path("id") sessionId: String, @Body body: ClarifyRequest): ClarifyResponse
 
+    @POST("api/session/{id}/chat")
+    suspend fun chat(@Path("id") sessionId: String, @Body body: ChatRequest): ChatResponse
+
+    @POST("api/session/{id}/intent")
+    suspend fun patchIntent(@Path("id") sessionId: String, @Body body: IntentPatchRequest): IntentPatchResponse
+
     @POST("api/session/{id}/search")
     suspend fun search(@Path("id") sessionId: String): SearchResponse
 
@@ -57,7 +63,7 @@ interface ApiService {
 
     // ---- app-driven browser OAuth (real store connect) ----
     @POST("api/connect/{store}/oauth/start")
-    suspend fun oauthStart(@Path("store") store: String): OAuthStartResponse
+    suspend fun oauthStart(@Path("store") store: String, @Body body: OAuthStartRequest): OAuthStartResponse
 
     @GET("api/connect/{store}/status")
     suspend fun connectStatus(@Path("store") store: String): ConnectStatusResponse
