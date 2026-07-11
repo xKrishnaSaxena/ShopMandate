@@ -18,12 +18,19 @@ if _env.exists():
             os.environ.setdefault(k.strip(), v.strip())
 
 from . import orchestrator  # noqa: E402
+import base64  # noqa: E402
+
+from . import gemini, p3p  # noqa: E402
 from .models import (  # noqa: E402
     ClarifyReq,
     ConnectStartReq,
     ConnectVerifyReq,
+    MandateReq,
     PayReq,
+    PreauthReq,
+    SayReq,
     StartReq,
+    VisualizeReq,
 )
 
 app = FastAPI(title="ShopMandate backend")
@@ -65,6 +72,97 @@ async def session_search(sid: str) -> dict:
 @app.get("/api/merchants")
 def merchants() -> dict:
     return orchestrator.merchants_status()
+
+
+# ---- Pine Labs P3P: agentic payment (edge #1) ----
+@app.get("/api/p3p/status")
+def p3p_status() -> dict:
+    return {"mode": p3p.mode()}
+
+
+# ---- Wow-factors ----
+@app.post("/api/visualize")
+def visualize(req: VisualizeReq) -> dict:
+    """Nano Banana: generate a clean product/try-on image (from a name or a 'like this' photo)."""
+    if req.image_b64:
+        prompt = ("Identify the product in this image, then generate a clean, e-commerce style product "
+                  f"photo of a similar item{(' ' + req.style) if req.style else ' on a plain white background'}. "
+                  "Studio lighting, high detail, no text or watermark.")
+    else:
+        prompt = (f"Clean e-commerce product photo of {req.product or 'wireless earbuds'}"
+                  f"{(', ' + req.style) if req.style else ', on a plain white background'}. "
+                  "Studio lighting, high detail, no text or watermark.")
+    try:
+        png = gemini.gen_visual(prompt, req.image_b64)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"image gen failed: {e}")
+    return {"image_b64": base64.b64encode(png).decode(), "mime": "image/png"}
+
+
+@app.post("/api/say")
+def say(req: SayReq) -> dict:
+    """Gemini TTS: Hinglish voice-out of the agent's reply (returns WAV base64)."""
+    try:
+        wav = gemini.say(req.text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"tts failed: {e}")
+    return {"audio_b64": base64.b64encode(wav).decode(), "mime": "audio/wav"}
+
+
+@app.get("/api/session/{sid}/haggle")
+async def haggle_stream(sid: str):
+    """Live A2A haggle: stream the negotiation steps one-by-one (SSE) for the compare animation."""
+    import asyncio
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+
+    s = orchestrator.SESSIONS.get(sid)
+    steps = list((s.decision.steps if s and s.decision else []) or [])
+
+    async def gen():
+        for st in steps:
+            yield f"data: {_json.dumps({'step': st})}\n\n"
+            await asyncio.sleep(0.9)
+        winner = s.decision.winner.model_dump() if s and s.decision and s.decision.winner else None
+        yield f"data: {_json.dumps({'done': True, 'winner': winner})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/api/session/{sid}/research")
+def research(sid: str) -> dict:
+    """Deep-research-lite: a Hinglish 'best value' one-liner over the current quotes."""
+    s = orchestrator.SESSIONS.get(sid)
+    if not s or not s.decision or not s.decision.quotes:
+        raise HTTPException(status_code=404, detail="no quotes; run /search first")
+    summary = " · ".join(f"{q.store}: ₹{q.price_inr} ({q.delivery})" for q in s.decision.quotes)
+    try:
+        note = gemini.value_note(summary)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"research failed: {e}")
+    return {"note": note, "quotes_considered": len(s.decision.quotes)}
+
+
+@app.post("/api/session/{sid}/mandate")
+async def create_mandate(sid: str, req: MandateReq) -> dict:
+    try:
+        return await orchestrator.create_mandate(sid, req.mobile, req.cap_inr)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown session_id")
+
+
+@app.post("/api/session/{sid}/preauth")
+def set_preauth(sid: str, req: PreauthReq) -> dict:
+    return _session(lambda: orchestrator.set_preauth(sid, req.product, req.max_price_inr))
+
+
+@app.post("/api/session/{sid}/preauth/run")
+async def run_preauth(sid: str) -> dict:
+    try:
+        return await orchestrator.run_preauth(sid)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="unknown session_id")
 
 
 @app.post("/api/merchants/{mid}/connect")

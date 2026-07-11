@@ -9,7 +9,7 @@ import asyncio
 import uuid
 from dataclasses import dataclass
 
-from . import connect, gemini, negotiation, payment
+from . import connect, gemini, negotiation, p3p, payment
 from .merchants import registry
 from .models import (
     ClarifyReq,
@@ -27,6 +27,8 @@ class Session:
     intent: Intent | None = None
     decision: Decision | None = None
     connected: bool = False
+    mobile: str | None = None            # set once a P3P mandate is approved
+    preauth: dict | None = None          # {"product": str, "max_price_inr": int}
 
 
 SESSIONS: dict[str, Session] = {}
@@ -130,12 +132,35 @@ async def connect_merchant(mid: str) -> dict:
     return {"status": "connected" if ok else "failed", "id": mid, "name": m.name}
 
 
+def _decision_from_dict(d: dict) -> Decision:
+    from .models import Cart, Winner
+    return Decision(
+        status=d.get("status", "no_stock"),
+        quotes=[Quote(**q) for q in d.get("quotes", [])],
+        winner=Winner(**d["winner"]) if d.get("winner") else None,
+        cart=Cart(**d["cart"]) if d.get("cart") else None,
+        steps=d.get("steps", []),
+        clarifying_question=d.get("clarifying_question"),
+    )
+
+
+async def _agentic_decision(intent: Intent) -> Decision:
+    """Prefer the ADK Managed-Agent orchestration; fall back to deterministic gather+negotiate."""
+    try:
+        from . import adk_agents
+        d = await adk_agents.run_shopping(intent)
+        if d:
+            return _decision_from_dict(d)
+    except Exception as e:
+        print(f"[ADK fallback] {e}")
+    return negotiation.decide(intent, await _gather_quotes(intent))
+
+
 # ---- §8.3 search ----
 async def search(session_id: str) -> dict:
     s = _get(session_id)
     intent = s.intent or Intent()
-    quotes = await _gather_quotes(intent)
-    decision = negotiation.decide(intent, quotes)
+    decision = await _agentic_decision(intent)
     s.decision = decision
 
     body: dict = {
@@ -165,16 +190,59 @@ def connect_verify(session_id: str, otp: str) -> dict:
     return {"status": "connected", "store": "Zepto"}
 
 
+# ---- P3P mandate + pre-auth (edge #1) ----
+async def create_mandate(session_id: str, mobile: str, cap_inr: int) -> dict:
+    """One-time human approval of a UPI spend cap; after this the agent pays autonomously."""
+    s = _get(session_id)
+    s.mobile = mobile
+    res = await p3p.create_mandate(mobile, cap_inr)
+    return {"status": "mandate_active", **res, "remaining_inr": p3p.balance(mobile)}
+
+
+def set_preauth(session_id: str, product: str, max_price_inr: int) -> dict:
+    """Human-not-present rule: 'auto-buy <product> if price <= ₹X'."""
+    s = _get(session_id)
+    s.preauth = {"product": product, "max_price_inr": max_price_inr}
+    return {"status": "preauth_set", **s.preauth,
+            "needs_mandate": s.mobile is None}
+
+
+async def run_preauth(session_id: str) -> dict:
+    """Agent checks the rule against live store prices; buys autonomously if it matches."""
+    s = _get(session_id)
+    if not s.preauth:
+        return {"status": "no_preauth"}
+    intent = Intent(product=s.preauth["product"], budget_inr=s.preauth["max_price_inr"])
+    decision = await _agentic_decision(intent)
+    s.decision = decision
+    if decision.status != "awaiting_approval" or not decision.cart:
+        return {"status": "no_match", "steps": decision.steps}
+    if decision.cart.price_inr > s.preauth["max_price_inr"]:
+        return {"status": "above_limit", "found_inr": decision.cart.price_inr}
+    # matches → agent captures WITHOUT a second human step (mandate already approved)
+    return await pay(session_id, PayReq(upi_app="gpay"), auto=True)
+
+
 # ---- §8.6 pay ----
-async def pay(session_id: str, req: PayReq) -> dict:
+async def pay(session_id: str, req: PayReq, auto: bool = False) -> dict:
     s = _get(session_id)
     if not s.decision or not s.decision.cart:
         return {"status": "no_cart"}
-    intent_id = f"intent-{session_id[:8]}"
-    cart_id = f"cart-{session_id[:8]}"
-    payment_id = f"payment-{session_id[:8]}"
-    receipt = await payment.charge(
-        s.decision.cart, req.upi_app,
-        {"intent": intent_id, "cart": cart_id, "payment": payment_id},
-    )
+    cart = s.decision.cart
+    audit = {k: f"{k}-{session_id[:8]}" for k in ("intent", "cart", "payment")}
+
+    # P3P path: if a mandate is approved, the agent captures within the cap (agentic).
+    if s.mobile and p3p.mandate_for(s.mobile):
+        cap = await p3p.capture(s.mobile, cart.price_inr, cart.store, f"SM-{session_id[:4]}")
+        if cap.get("status") == "captured":
+            receipt = await payment.charge(cart, "P3P · UPI ReservePay", audit)
+            body = {"status": "complete", "order_id": receipt.order_id,
+                    "receipt": {**receipt.model_dump(), "paid_via": f"P3P · {cap['rail']}",
+                                "p3p": cap}}
+            body["autonomous"] = auto  # bought without a second human step
+            return body
+        return {"status": cap.get("status", "p3p_failed"), "p3p": cap}
+
+    # fallback: mock UPI (framed)
+    receipt = await payment.charge(cart, req.upi_app, audit)
     return {"status": "complete", "order_id": receipt.order_id, "receipt": receipt.model_dump()}

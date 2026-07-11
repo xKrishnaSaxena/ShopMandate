@@ -52,6 +52,14 @@ class Merchant(ABC):
     async def search(self, query: str, budget: int | None) -> Quote | None: ...
 
 
+_ALIASES = {
+    "earbuds": "wireless earbuds", "earphones": "wireless earbuds", "tws": "wireless earbuds",
+    "airdopes": "wireless earbuds", "headphone": "wireless earbuds", "buds": "wireless earbuds",
+    "atta": "atta 5kg", "flour": "atta 5kg", "wheat": "atta 5kg",
+    "charger": "phone charger", "adapter": "phone charger",
+}
+
+
 class MockMerchant(Merchant):
     real = False
 
@@ -63,11 +71,22 @@ class MockMerchant(Merchant):
     def connected(self) -> bool:
         return True
 
+    def _key(self, query: str) -> str | None:
+        q = query.lower().strip()
+        if q in self.catalog:
+            return q
+        for token, key in _ALIASES.items():
+            if token in q and key in self.catalog:
+                return key
+        for key in self.catalog:  # loose substring overlap
+            if key in q or any(w in q for w in key.split()):
+                return key
+        return None
+
     async def search(self, query: str, budget: int | None) -> Quote | None:
-        row = self.catalog.get(query.lower())
-        if not row:
-            return None
-        return Quote(store=self.name, **row)
+        key = self._key(query)
+        row = self.catalog.get(key) if key else None
+        return Quote(store=self.name, **row) if row else None
 
 
 class RealMerchant(Merchant):

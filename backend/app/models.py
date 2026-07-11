@@ -78,5 +78,25 @@ class ConnectVerifyReq(BaseModel):
 
 class PayReq(BaseModel):
     method: Literal["upi"] = "upi"
-    upi_app: Literal["gpay", "phonepe", "paytm", "bhim"]
+    upi_app: Literal["gpay", "phonepe", "paytm", "bhim"] = "gpay"
     upi_id: str | None = None
+
+
+class MandateReq(BaseModel):
+    mobile: str
+    cap_inr: int = 5000
+
+
+class PreauthReq(BaseModel):
+    product: str
+    max_price_inr: int
+
+
+class VisualizeReq(BaseModel):
+    product: str | None = None
+    image_b64: str | None = None   # "find one like this" reference photo
+    style: str | None = None       # e.g. "on a wooden table", "worn by a person"
+
+
+class SayReq(BaseModel):
+    text: str
