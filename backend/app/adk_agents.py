@@ -27,14 +27,17 @@ async def search_stores(query: str, tool_context: ToolContext) -> str:
     """Search every store (real MCP + mock) for `query` and record their quotes."""
     budget = tool_context.state.get("budget")
 
-    async def one(m):
+    async def many(m):
         try:
-            return await m.search(query, budget)
+            return await m.search_many(query, budget, limit=4)
         except Exception as e:  # a flaky store must not sink the round
             print(f"[store {m.id}] {e}")
-            return None
+            return []
 
-    quotes = [q for q in await asyncio.gather(*(one(m) for m in registry.MERCHANTS)) if q]
+    groups = await asyncio.gather(*(many(m) for m in registry.MERCHANTS))
+    quotes = [q for g in groups for q in g]
+    quotes.sort(key=lambda q: q.price_inr)
+    quotes = quotes[:6]  # best + alternatives / top-N
     tool_context.state["quotes"] = [q.model_dump() for q in quotes]
     if not quotes:
         return "No store has this in stock."

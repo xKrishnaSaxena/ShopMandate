@@ -28,6 +28,20 @@ object ApiClient {
     /** Uses the currently-configured base URL (from DevConfig). */
     fun create(context: Context): ApiService = create(DevConfig.getBaseUrl(context))
 
+    /** ws:// URL for the Live voice bridge, derived from the configured base URL. */
+    fun liveWsUrl(context: Context): String =
+        DevConfig.getBaseUrl(context)
+            .replaceFirst("https://", "wss://")
+            .replaceFirst("http://", "ws://")
+            .trimEnd('/') + "/ws/live"
+
+    /** Parse a {"type":"quotes","quotes":[...]} Live event into typed quotes. */
+    fun parseQuotes(text: String): List<Quote> = try {
+        json.decodeFromString<LiveQuotesEvent>(text).quotes
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     fun create(baseUrl: String): ApiService {
         val logging = HttpLoggingInterceptor().apply {
             // BASIC, not BODY — audio/image payloads are huge base64 and BODY logging stalls the call.

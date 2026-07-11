@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.shopmandate.ui.theme.AppBg
 import com.shopmandate.ui.theme.AppSurface
 import com.shopmandate.ui.theme.Brand
@@ -61,6 +62,7 @@ fun ApproveScreen(
     qty: Int = 1,
     reason: String = "Store B chuna — ₹150 sasta + jaldi delivery",
     delivery: String = "kal shaam tak",
+    imageUrl: String? = null,
     visualB64: String? = null,
     onApprove: () -> Unit = {},
     onReject: () -> Unit = {},
@@ -119,10 +121,19 @@ fun ApproveScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     if (visual != null) {
+                        // AI-generated visual (Nano Banana) takes priority
                         Image(
                             bitmap = visual,
                             contentDescription = productName,
                             contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (!imageUrl.isNullOrBlank()) {
+                        // Real product photo from the store CDN
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = productName,
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {

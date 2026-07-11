@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.shopmandate.capture.LiveSession
 import com.shopmandate.net.ApiClient
 import com.shopmandate.net.ApiService
 import com.shopmandate.net.Cart
@@ -42,6 +43,7 @@ sealed interface Screen {
     data object Success : Screen
     data object Orders : Screen
     data object Profile : Screen
+    data object Live : Screen
 }
 
 data class UserProfile(val name: String, val phone: String)
@@ -62,7 +64,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
     var connectingStore: String? = null
         private set
 
-    private val _profile = MutableStateFlow(UserProfile(name = "Ravi Kumar", phone = "9876543210"))
+    private val _profile = MutableStateFlow(UserProfile(name = "Utsav", phone = "9876543210"))
     val profile: StateFlow<UserProfile> = _profile.asStateFlow()
 
     private val _reorderSuggestion = MutableStateFlow<String?>("boAt Airdopes 141 — pichli baar ₹1,800 mein")
@@ -97,6 +99,20 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
     val visualB64: StateFlow<String?> = _visualB64.asStateFlow()
     private val _researchNote = MutableStateFlow<String?>(null)
     val researchNote: StateFlow<String?> = _researchNote.asStateFlow()
+
+    // ---- live voice session ----
+    private var live: LiveSession? = null
+    private var liveNewUserTurn = true
+    private val _liveConnected = MutableStateFlow(false)
+    val liveConnected: StateFlow<Boolean> = _liveConnected.asStateFlow()
+    private val _liveStatus = MutableStateFlow("Connecting…")
+    val liveStatus: StateFlow<String> = _liveStatus.asStateFlow()
+    private val _liveUserText = MutableStateFlow("")
+    val liveUserText: StateFlow<String> = _liveUserText.asStateFlow()
+    private val _liveAgentText = MutableStateFlow("")
+    val liveAgentText: StateFlow<String> = _liveAgentText.asStateFlow()
+    private val _liveQuotes = MutableStateFlow<List<Quote>>(emptyList())
+    val liveQuotes: StateFlow<List<Quote>> = _liveQuotes.asStateFlow()
 
     // ---- nav helpers (used by screens) ----
     fun goHome() { _screen.value = Screen.Home }
@@ -161,6 +177,21 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         _intent.value = r.parsedIntent
     }
 
+    /** Apply the clarify choice (brand/budget) then immediately search — one smooth step. */
+    fun submitClarify(type: String?, budgetInr: Int?) = job("Stores compare kar raha hoon…") {
+        val id = sessionId ?: return@job
+        if (type != null || budgetInr != null) {
+            val r = api.clarify(id, ClarifyRequest(ClarifyAnswers(type = type, budgetInr = budgetInr)))
+            _intent.value = r.parsedIntent
+        }
+        val s = api.search(id)
+        _quotes.value = s.quotes
+        _winner.value = s.winner
+        _cart.value = s.cart
+        _haggleSteps.value = s.steps
+        _screen.value = Screen.Comparing
+    }
+
     fun search() = job("Stores compare kar raha hoon…") {
         val id = sessionId ?: return@job
         val r = api.search(id)
@@ -210,6 +241,61 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
         _researchNote.value = api.research(id).note
     }
 
+    // ---- live voice ----
+    fun startLive() {
+        _liveConnected.value = false
+        _liveStatus.value = "Connecting…"
+        _liveUserText.value = ""
+        _liveAgentText.value = ""
+        _liveQuotes.value = emptyList()
+        liveNewUserTurn = true
+        live?.stop()
+        live = LiveSession(::onLiveEvent).also {
+            it.start(ApiClient.liveWsUrl(getApplication()), _profile.value.name)
+        }
+        _screen.value = Screen.Live
+    }
+
+    fun stopLive() {
+        live?.stop()
+        live = null
+        _screen.value = Screen.Home
+    }
+
+    private fun onLiveEvent(e: LiveSession.LiveEvent) {
+        when (e) {
+            is LiveSession.LiveEvent.Connected -> {
+                _liveConnected.value = e.connected
+                if (e.connected) _liveStatus.value = "Bolo… sun raha hoon 🎙️"
+            }
+            is LiveSession.LiveEvent.Transcript -> {
+                if (e.role == "user") {
+                    if (liveNewUserTurn) {
+                        _liveUserText.value = ""
+                        _liveAgentText.value = ""
+                        liveNewUserTurn = false
+                    }
+                    _liveUserText.value += e.text
+                    _liveStatus.value = "Sun raha hoon…"
+                } else {
+                    _liveAgentText.value += e.text
+                    _liveStatus.value = "Bol raha hoon…"
+                }
+            }
+            is LiveSession.LiveEvent.Quotes -> {
+                _liveQuotes.value = ApiClient.parseQuotes(e.rawJson)
+            }
+            LiveSession.LiveEvent.TurnComplete -> {
+                liveNewUserTurn = true
+                _liveStatus.value = "Bolo… 🎙️"
+            }
+            is LiveSession.LiveEvent.Failure -> {
+                _liveStatus.value = "Dikkat: ${e.message}"
+                _liveConnected.value = false
+            }
+        }
+    }
+
     // ---- infra ----
     private var player: MediaPlayer? = null
 
@@ -242,6 +328,7 @@ class ShopViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         player?.release()
+        live?.stop()
         super.onCleared()
     }
 }

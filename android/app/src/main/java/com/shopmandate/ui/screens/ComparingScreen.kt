@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -53,6 +54,7 @@ import com.shopmandate.ui.theme.Cta
 import com.shopmandate.ui.theme.Ink
 import com.shopmandate.ui.theme.InkMuted
 import com.shopmandate.ui.theme.SuccessGreen
+import coil.compose.AsyncImage
 import com.shopmandate.net.Quote
 import com.shopmandate.net.Winner
 
@@ -131,30 +133,33 @@ fun ComparingScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // ---- Store cards (winner highlighted) ----
+        // ---- Ranked product cards (cheapest/best first, highlighted) ----
         quotes.forEachIndexed { i, q ->
-            val isWinner = winner?.store == q.store
+            val isWinner = winner != null && winner.store == q.store && winner.priceInr == q.priceInr
+            if (i == 1) {
+                // divider label between the best pick and the alternatives
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Baaki options",
+                    color = InkMuted,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                )
+            }
             StoreCard(
                 storeName = q.store,
                 productName = q.productName.ifBlank { product },
+                imageUrl = q.imageUrl,
                 priceText = "₹${"%,d".format(q.priceInr)}",
-                strikethrough = winner != null && !isWinner,
+                strikethrough = false,
                 delivery = "Delivery: ${q.delivery}",
                 fast = isFast(q.delivery),
                 highlighted = isWinner,
                 savingBadge = if (isWinner && maxPrice > q.priceInr) "₹${maxPrice - q.priceInr} sasta" else null,
-                onClick = if (isWinner) onNext else null,
+                onClick = if (isWinner) onNext else null,   // best pick proceeds; others are for comparison
             )
-            if (i < quotes.lastIndex) {
-                Spacer(Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier.size(44.dp).clip(CircleShape).background(Brand),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("VS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
-                Spacer(Modifier.height(10.dp))
-            }
+            if (i < quotes.lastIndex) Spacer(Modifier.height(10.dp))
         }
 
         Spacer(Modifier.height(24.dp))
@@ -187,6 +192,7 @@ fun ComparingScreen(
 private fun StoreCard(
     storeName: String,
     productName: String = PRODUCT,
+    imageUrl: String? = null,
     priceText: String,
     strikethrough: Boolean,
     delivery: String,
@@ -242,7 +248,7 @@ private fun StoreCard(
             }
 
             Spacer(Modifier.height(12.dp))
-            // Product image placeholder
+            // Real product image (Zepto/store CDN), else placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -251,7 +257,16 @@ private fun StoreCard(
                     .background(Brand.copy(alpha = 0.04f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Headphones, contentDescription = null, tint = InkMuted.copy(alpha = 0.5f), modifier = Modifier.size(48.dp))
+                if (!imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = productName,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Icon(Icons.Filled.Headphones, contentDescription = null, tint = InkMuted.copy(alpha = 0.5f), modifier = Modifier.size(48.dp))
+                }
             }
 
             Spacer(Modifier.height(6.dp))

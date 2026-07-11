@@ -51,6 +51,8 @@ def _intent_public(i: Intent) -> dict:
         "qty": i.qty,
         "constraints": i.constraints,
         "language": i.language,
+        "quick_replies": i.quick_replies,
+        "budget_relevant": i.budget_relevant,
     }
 
 
@@ -76,7 +78,8 @@ def start(req: StartReq) -> dict:
         "status": "need_clarification" if clarify_needed else "intent_ready",
         "transcript": intent.transcript,
         "parsed_intent": _intent_public(intent),
-        "clarifying_question": intent.clarifying_question if clarify_needed else None,
+        # always surface the question + options so the (always-shown) clarify screen is dynamic
+        "clarifying_question": intent.clarifying_question,
     }
 
 
@@ -91,11 +94,22 @@ def clarify(session_id: str, req: ClarifyReq) -> dict:
         except (TypeError, ValueError):
             pass
     if "type" in a and a["type"]:
-        t = str(a["type"])
-        if t not in i.constraints:
-            i.constraints.append(t)
-        if not i.product:
-            i.product = f"{t} earbuds" if "wire" in t else t
+        import re
+        choice = str(a["type"]).strip()
+        low = choice.lower()
+        # a budget-range quick-reply ("Under 1500", "1500 se 3000", "Premium range")
+        is_budgetish = bool(re.search(r"\d", choice)) or any(
+            w in low for w in ("premium", "budget", "best offer", "best deal", "sasta")
+        )
+        nums = [int(x.replace(",", "")) for x in re.findall(r"\d[\d,]*", choice)]
+        if is_budgetish and nums:
+            i.budget_inr = max(nums)  # "1500 se 3000" -> 3000; "Under 1500" -> 1500
+        elif not is_budgetish:
+            # brand / type qualifier -> refine the actual search query
+            if low not in (i.product or "").lower():
+                i.product = f"{choice} {i.product}".strip()
+            if choice not in i.constraints:
+                i.constraints.append(choice)
     for k, v in a.items():
         if k in ("qty",) and v is not None:
             try:
@@ -107,18 +121,21 @@ def clarify(session_id: str, req: ClarifyReq) -> dict:
     return {"status": "intent_ready", "parsed_intent": _intent_public(i)}
 
 
-async def _gather_quotes(intent: Intent) -> list[Quote]:
+async def _gather_quotes(intent: Intent, per_store: int = 4, cap: int = 6) -> list[Quote]:
     query = (intent.product or "").strip() or "wireless earbuds"
 
-    async def one(m) -> Quote | None:
+    async def many(m) -> list[Quote]:
         try:
-            return await m.search(query, intent.budget_inr)
+            return await m.search_many(query, intent.budget_inr, limit=per_store)
         except Exception as e:  # a flaky merchant must not sink the whole search
             print(f"[merchant {m.id}] search failed: {e}")
-            return None
+            return []
 
-    results = await asyncio.gather(*(one(m) for m in registry.MERCHANTS))
-    return [q for q in results if q is not None]
+    groups = await asyncio.gather(*(many(m) for m in registry.MERCHANTS))
+    quotes = [q for g in groups for q in g]
+    # cheapest first, capped — winner is the best deal, the rest are alternatives / top-N
+    quotes.sort(key=lambda q: q.price_inr)
+    return quotes[:cap]
 
 
 # ---- merchants ----

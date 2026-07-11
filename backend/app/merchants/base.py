@@ -51,6 +51,11 @@ class Merchant(ABC):
     @abstractmethod
     async def search(self, query: str, budget: int | None) -> Quote | None: ...
 
+    async def search_many(self, query: str, budget: int | None, limit: int = 5) -> list[Quote]:
+        """Return up to `limit` product options (cheapest first). Default: wrap single search()."""
+        q = await self.search(query, budget)
+        return [q] if q else []
+
 
 _ALIASES = {
     "earbuds": "wireless earbuds", "earphones": "wireless earbuds", "tws": "wireless earbuds",
@@ -102,6 +107,9 @@ class RealMerchant(Merchant):
         self.price_in_paise = price_in_paise
         self.delivery = delivery
         self._tools: list[str] | None = None
+        self._address_id: str | None = None
+        self._pass_address_inline = False  # true when search needs addressId inline (Instamart)
+        self._address_ready = False  # resolve/select the address only once (latency)
 
     def connected(self) -> bool:
         return self.mcp.connected()
@@ -117,7 +125,10 @@ class RealMerchant(Merchant):
         return self.connected()
 
     def _price(self, p: dict) -> float | None:
-        v = _first(p, ["sellingPrice", "price", "finalPrice", "offerPrice", "mrp"])
+        v = _first(p, ["sellingPrice", "finalPrice", "offerPrice", "price", "mrp"])
+        # Some MCPs (Swiggy Instamart) nest the price: {"price": {"offerPrice": 212, "mrp": 232}}
+        if isinstance(v, dict):
+            v = _first(v, ["offerPrice", "sellingPrice", "finalPrice", "price", "mrp"])
         if not isinstance(v, (int, float)):
             try:
                 v = float(str(v).replace("₹", "").replace(",", "").strip())
@@ -125,41 +136,82 @@ class RealMerchant(Merchant):
                 return None
         return (v / 100) if self.price_in_paise else float(v)
 
+    @staticmethod
+    def _expand(products: list[dict]) -> list[dict]:
+        """Flatten products that carry a `variations`/`variants` list (Instamart) into
+        one candidate per variation, so each priced SKU is comparable."""
+        out: list[dict] = []
+        for p in products:
+            variants = p.get("variations") or p.get("variants")
+            if isinstance(variants, list) and variants:
+                for v in variants:
+                    if isinstance(v, dict):
+                        out.append({**p, **v})  # variation fields (price/image/name) win
+            else:
+                out.append(p)
+        return out
+
     async def _ensure_address(self, tools: list[str]) -> None:
+        if self._address_ready:
+            return  # already resolved once — skip the extra round-trip on every search
         addr_tool = _find_tool(tools, ["list_saved_addresses", "get_addresses", "list_addresses"])
         sel_tool = _find_tool(tools, ["select_saved_address", "select_address"])
         if not addr_tool:
             return
-        addrs = _as_list(await self.mcp.call(addr_tool, {}), ["addresses", "data", "result"])
-        if addrs and sel_tool:
-            aid = _first(addrs[0], ["id", "addressId", "address_id"])
-            if aid:
-                await self.mcp.call(sel_tool, {"addressId": aid})
+        addrs = _as_list(await self.mcp.call(addr_tool, {}), ["addresses", "data", "result", "savedAddresses"])
+        if not addrs:
+            return
+        aid = _first(addrs[0], ["id", "addressId", "address_id"])
+        self._address_id = str(aid) if aid else None
+        if sel_tool and aid:
+            await self.mcp.call(sel_tool, {"addressId": aid})  # server-side selection (Zepto)
+        else:
+            self._pass_address_inline = True  # no select tool → pass addressId in search (Instamart)
+        self._address_ready = True
 
-    async def search(self, query: str, budget: int | None) -> Quote | None:
+    def _to_quote(self, p: dict, price: float, query: str) -> Quote:
+        name = str(_first(p, ["name", "product_name", "displayName", "title"]) or query)
+        img = _first(p, ["imageUrl", "image", "img"])
+        return Quote(store=self.name, product_name=name, price_inr=int(round(price)),
+                     delivery=self.delivery, in_stock=True, image_url=img if isinstance(img, str) else None)
+
+    async def search_many(self, query: str, budget: int | None, limit: int = 5) -> list[Quote]:
         if not self.connected():
-            return None  # not linked yet — skip (connect explicitly via /connect, no OAuth popup mid-search)
+            return []  # not linked yet — skip (connect explicitly via /connect, no OAuth popup mid-search)
         tools = await self.tools()
         await self._ensure_address(tools)
         search_tool = _find_tool(tools, ["search_products", "search_multiple", "search"],
                                  avoid=["restaurant", "menu"])
         if not search_tool:
-            return None
-        res = await self.mcp.call(search_tool, {"query": query})
-        products = _as_list(res, ["products", "results", "items", "data"])
-        best: tuple[dict, float] | None = None
+            return []
+        args: dict = {"query": query}
+        if self._pass_address_inline and self._address_id:
+            args["addressId"] = self._address_id
+        res = await self.mcp.call(search_tool, args)
+        products = self._expand(_as_list(res, ["products", "results", "items", "data"]))
+        priced: list[tuple[dict, float]] = []
         for p in products:
             price = self._price(p)
             if price is None or price <= 0:
                 continue
             if budget is not None and price > budget:
                 continue
-            if best is None or price < best[1]:
-                best = (p, price)
-        if best is None:
-            return None
-        p, price = best
-        name = str(_first(p, ["name", "product_name", "displayName", "title"]) or query)
-        img = _first(p, ["imageUrl", "image", "img"])
-        return Quote(store=self.name, product_name=name, price_inr=int(round(price)),
-                     delivery=self.delivery, in_stock=True, image_url=img if isinstance(img, str) else None)
+            priced.append((p, price))
+        priced.sort(key=lambda x: x[1])
+        # de-dup by product name so we don't show the same item twice
+        seen: set[str] = set()
+        out: list[Quote] = []
+        for p, price in priced:
+            q = self._to_quote(p, price, query)
+            key = q.product_name.lower().strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(q)
+            if len(out) >= limit:
+                break
+        return out
+
+    async def search(self, query: str, budget: int | None) -> Quote | None:
+        many = await self.search_many(query, budget, limit=1)
+        return many[0] if many else None

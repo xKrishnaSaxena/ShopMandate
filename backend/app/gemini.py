@@ -35,7 +35,12 @@ SYSTEM = (
     "You are a shopping intent parser for Indian users. Input may be Hinglish or Kannada. "
     "Extract product, budget in INR, quantity, and constraints. If the product TYPE or BUDGET is "
     "ambiguous or missing, set needs_clarification=true and ask ONE short Hinglish question. "
-    "Never invent a product the user did not mention. For audio, also echo the transcript."
+    "Never invent a product the user did not mention. For audio, also echo the transcript. "
+    "ALWAYS produce 2-4 short, product-SPECIFIC quick_reply options (Hinglish, max 3 words each) that "
+    "directly answer your clarifying_question — e.g. for atta: ['Aashirvaad','Fortune','Koi bhi sasta']; "
+    "for earbuds: ['Wireless','Wired bhi ok']; for a phone: ['5G','Camera best','Battery best']. "
+    "Set budget_relevant=true only when a rupee budget is meaningful for this product "
+    "(true for electronics/appliances, usually false for small groceries)."
 )
 
 
@@ -51,6 +56,8 @@ class GeminiIntent(BaseModel):
     language: str = "hi-IN"
     needs_clarification: bool = False
     clarifying_question: str | None = None
+    quick_replies: list[str] = []
+    budget_relevant: bool = True
 
 
 def _to_intent(g: GeminiIntent) -> Intent:
@@ -65,6 +72,8 @@ def _to_intent(g: GeminiIntent) -> Intent:
         transcript=g.transcript,
         needs_clarification=g.needs_clarification,
         clarifying_question=g.clarifying_question,
+        quick_replies=g.quick_replies[:4],
+        budget_relevant=g.budget_relevant,
     )
 
 

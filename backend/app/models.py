@@ -18,6 +18,8 @@ class Intent(BaseModel):
     transcript: str = ""
     needs_clarification: bool = False
     clarifying_question: str | None = None
+    quick_replies: list[str] = Field(default_factory=list)
+    budget_relevant: bool = True
 
 
 class Quote(BaseModel):

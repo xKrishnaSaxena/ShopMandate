@@ -24,6 +24,8 @@ data class Intent(
     val qty: Int = 1,
     val constraints: List<String> = emptyList(),
     val language: String = "en-IN",
+    val quickReplies: List<String> = emptyList(),   // agent-generated, product-specific options
+    val budgetRelevant: Boolean = true,
 )
 
 @Serializable
@@ -115,6 +117,10 @@ data class VisualizeResponse(val imageB64: String, val mime: String = "image/png
 
 @Serializable
 data class ResearchResponse(val note: String, val quotesConsidered: Int = 0)
+
+// live voice bridge event: {"type":"quotes","quotes":[...]}
+@Serializable
+data class LiveQuotesEvent(val quotes: List<Quote> = emptyList())
 
 // ---- POST /connect/{store}/start & /verify ----
 @Serializable

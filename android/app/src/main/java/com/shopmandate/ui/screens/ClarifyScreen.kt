@@ -56,11 +56,13 @@ fun ClarifyScreen(
     budgetInr: Int? = 2000,
     qty: Int = 1,
     question: String? = null,
-    onNext: () -> Unit = {},
+    quickReplies: List<String> = listOf("Wireless", "Wired bhi ok"),
+    budgetRelevant: Boolean = true,
+    onNext: (choice: String?, budgetInr: Int?) -> Unit = { _, _ -> },
     onBack: () -> Unit = {},
 ) {
-    var type by remember { mutableStateOf("Wireless") }
-    var budget by remember { mutableStateOf(budgetInr?.let { "₹$it" } ?: "Koi budget nahi ∞") }
+    var choice by remember(quickReplies) { mutableStateOf<String?>(null) }
+    var budget by remember(budgetInr) { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -145,33 +147,44 @@ fun ClarifyScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // ---- TYPE ----
-        SectionLabel("TYPE")
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ChoiceChip("Wireless", selected = type == "Wireless") { type = "Wireless" }
-            ChoiceChip("Wired bhi ok", selected = type == "Wired") { type = "Wired" }
+        // ---- Agent-generated options (dynamic per product) ----
+        if (quickReplies.isNotEmpty()) {
+            SectionLabel("CHUNO")
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                quickReplies.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        pair.forEach { label ->
+                            SelectablePill(
+                                text = label,
+                                selected = choice == label,
+                                onClick = { choice = if (choice == label) null else label },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))  // keep last row balanced
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
         }
 
-        Spacer(Modifier.height(20.dp))
-
-        // ---- ADJUST BUDGET ----
-        SectionLabel("ADJUST BUDGET")
-        Spacer(Modifier.height(8.dp))
-        val options = listOf("₹1500", "₹2000", "₹2500", "Koi budget nahi ∞")
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            options.chunked(2).forEach { pair ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    pair.forEach { label ->
-                        SelectablePill(
-                            text = label,
-                            selected = budget == label,
-                            onClick = { budget = label },
-                            modifier = Modifier.weight(1f),
-                        )
+        // ---- Budget — only when it makes sense for this product ----
+        if (budgetRelevant) {
+            SectionLabel("ADJUST BUDGET")
+            Spacer(Modifier.height(8.dp))
+            val options = listOf("₹1500", "₹2000", "₹2500", "Koi budget nahi ∞")
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                options.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        pair.forEach { label ->
+                            SelectablePill(
+                                text = label,
+                                selected = budget == label,
+                                onClick = { budget = label },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
                 }
             }
@@ -189,7 +202,13 @@ fun ClarifyScreen(
             Text("Tap or just say your choice", color = InkMuted, fontSize = 14.sp)
         }
         Button(
-            onClick = onNext,
+            onClick = {
+                val chosenBudget = budget
+                    ?.let { Regex("\\d[\\d,]*").find(it)?.value }
+                    ?.replace(",", "")
+                    ?.toIntOrNull()
+                onNext(choice, chosenBudget)
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp),
