@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ShopMandate - Connect Store</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary": "#004b2f",
+                    "on-surface": "#1d1929",
+                    "on-background": "#1d1929",
+                    "background": "#fdf7ff",
+                    "surface-container-low": "#f8f1ff",
+                    "surface-container-highest": "#e7dff6",
+                    "outline-variant": "#c8c4d9",
+                    "surface-container-high": "#ede4fc",
+                    "outline": "#787587",
+                    "secondary": "#ae3104",
+                    "primary": "#3600cd",
+                    "on-tertiary-container": "#60e6a6",
+                    "surface-container": "#f3eaff",
+                    "on-error": "#ffffff",
+                    "secondary-container": "#fe693c",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-fixed": "#e4dfff",
+                    "primary-container": "#4f32e7",
+                    "on-primary-fixed-variant": "#3d10d7",
+                    "tertiary-fixed": "#76fbb9",
+                    "secondary-fixed-dim": "#ffb59f",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#f5eeff",
+                    "on-secondary-container": "#601600",
+                    "inverse-primary": "#c6bfff",
+                    "surface-dim": "#dfd6ed",
+                    "secondary-fixed": "#ffdbd1",
+                    "on-tertiary-fixed-variant": "#005234",
+                    "on-secondary": "#ffffff",
+                    "on-primary-container": "#cfc8ff",
+                    "inverse-surface": "#322e3f",
+                    "on-surface-variant": "#474556",
+                    "surface-tint": "#563bed",
+                    "surface-bright": "#fdf7ff",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed": "#3b0a00",
+                    "on-primary": "#ffffff",
+                    "on-secondary-fixed-variant": "#862200",
+                    "surface-variant": "#e7dff6",
+                    "primary-fixed-dim": "#c6bfff",
+                    "on-tertiary-fixed": "#002112",
+                    "on-primary-fixed": "#160066",
+                    "surface": "#fdf7ff",
+                    "tertiary-container": "#006541",
+                    "tertiary-fixed-dim": "#57de9f",
+                    "on-tertiary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-md": "24px",
+                    "gutter": "16px",
+                    "base": "8px",
+                    "stack-lg": "40px",
+                    "stack-sm": "12px",
+                    "container-padding": "20px"
+            },
+            "fontFamily": {
+                    "headline-lg": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "headline-md": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "caption": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "body-lg": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "label-md": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "headline-lg-mobile": [
+                            "Plus Jakarta Sans"
+                    ],
+                    "body-md": [
+                            "Plus Jakarta Sans"
+                    ]
+            },
+            "fontSize": {
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "caption": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(253, 247, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(200, 196, 217, 0.3);
+        }
+        .soft-shadow {
+            box-shadow: 0 4px 20px rgba(79, 50, 231, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen flex flex-col font-sans text-on-background overflow-x-hidden antialiased">
+<!-- Top App Bar -->
+<header class="bg-background dark:bg-background font-headline-md text-headline-md docked full-width top-0 bg-background dark:bg-background flat no shadows flex justify-between items-center px-container-padding py-stack-sm w-full sticky z-50">
+<div class="flex items-center gap-2">
+<!-- Back button implies temporary departure, but keeping as per general layout -->
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed tracking-tight">ShopMandate</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 0;">help_outline</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col px-container-padding pt-stack-md pb-stack-lg max-w-lg mx-auto w-full relative z-10">
+<!-- Header Section -->
+<section class="mb-stack-lg text-center mt-8">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-stack-sm">
+                Apna store account connect karo
+            </h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-sm mx-auto">
+                Order place karne ke liye ek baar login — official Zepto/Swiggy connection, fully secure.
+            </p>
+</section>
+<!-- Trust Badges -->
+<section class="mb-stack-lg flex justify-center gap-gutter">
+<div class="glass-panel soft-shadow rounded-2xl p-4 flex flex-col items-center gap-2 w-1/2">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center mb-1 overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="A stylized, modern, flat vector illustration of a Zepto delivery logo icon. Clean lines, light mode aesthetic, warm purple and white colors, minimal detail." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC2phkhq-oRMp6SJ_UB14PwMbDTePGKSBZxdZmWuxqsTaIx-Mh8iuX8RDNT-GeSnJQWgM9QsJ9Ow8w6ucN8JaCKqw1S0JV1d1L_0chrsZ9V2IQBEC1-IRh69-TyEPT8NB-pBaVWgnb2Z753OJ0_i-0wwdP2K0ryJmU7K2b7GRhnwzD7A6C4Fu_Fp61tHoiOT55MiI8yLxOMoXqIyMWyOmI6p1dz75uLf3nc28lA-NIhdTGFRpNTR24W"/>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-tertiary-container" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="font-caption text-caption text-on-surface-variant uppercase tracking-wider">Official</span>
+</div>
+</div>
+<div class="glass-panel soft-shadow rounded-2xl p-4 flex flex-col items-center gap-2 w-1/2">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center mb-1 overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="A stylized, modern, flat vector illustration of a Swiggy Instamart delivery logo icon. Clean lines, light mode aesthetic, warm orange and white colors, minimal detail." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhHVKtGmHGwpAuunX3xvmBvCF9WcnDut1gFwc_y7NxQrt-Srw-qcafyaFAw1DIHS7AfhHj75VE2Nqdr3N_lHCBgIJ_0AXcY0ZQQfhFga_RdJRutSuRzY-0ACb8Cqvq38A4NNtYBjNLIYAmBzQRKcR75cyYTql91pmKJlYQMqdPfDjsi274QgiepOFPkvDnpR-_uvHcd7sWmKWWAOk8LrF_r4CMMTfo6V9qnpX3BC5E7Nfc7UlsP15C"/>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-tertiary-container" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="font-caption text-caption text-on-surface-variant uppercase tracking-wider">Official</span>
+</div>
+</div>
+</section>
+<!-- Input Section -->
+<section class="mb-stack-lg relative">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary-fixed to-secondary-fixed-dim rounded-[26px] blur-sm opacity-50"></div>
+<div class="relative bg-surface-container-lowest rounded-[24px] p-6 soft-shadow border border-outline-variant/20">
+<label class="font-label-md text-label-md text-on-surface block mb-2" for="mobile-number">Enter Mobile Number</label>
+<div class="flex items-center bg-surface-container-low rounded-xl border border-outline-variant focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all p-1">
+<div class="flex items-center px-4 border-r border-outline-variant/50 gap-2">
+<img class="w-5 h-5 rounded-full object-cover" data-alt="A small, minimalist circular icon representing the Indian flag. Light mode, vibrant saffron, white, and green." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwwzA6vlgjuw_tP_k4GGNQA65Os0IgT9p5F-bjz5wv5z55QP1XMt83R0FnvEdG4412X2d8fhBZDoQL3x03gRShuyNnzA7p7Uc2Tw7c519uxjVO_HkQvhBQz91T9NKxbJQTq7lpSWn4GrGqWHwpC3VHNMaSPIOQcBSIYEfuSyCbUXwSCtMGPsyuuWwAzhsOpB0ru6fn3JvRg6Icxrqc4ReDR6POFIhjVcz5eBXDs_263zMUjR2VaFHS"/>
+<span class="font-body-lg text-body-lg text-on-surface font-medium">+91</span>
+</div>
+<input class="flex-1 bg-transparent border-none focus:ring-0 font-body-lg text-body-lg text-on-surface px-4 py-3 placeholder:text-outline" id="mobile-number" maxlength="10" placeholder="98765 43210" type="tel"/>
+</div>
+<div class="flex items-start gap-2 mt-4 text-tertiary-container bg-surface-container p-3 rounded-lg">
+<span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">lock</span>
+<p class="font-caption text-caption">256-bit secure connection. We do not store your passwords.</p>
+</div>
+</div>
+</section>
+<!-- CTA & Trust Line -->
+<section class="mt-auto">
+<button class="w-full bg-secondary-container hover:bg-secondary-container/90 text-on-secondary-container font-headline-md text-headline-md py-4 rounded-full transition-transform active:scale-[0.98] shadow-[0_8px_20px_rgb(254,105,60,0.2)] flex items-center justify-center gap-2">
+                OTP bhejo
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_forward</span>
+</button>
+<p class="text-center font-caption text-caption text-outline mt-4">
+                Number sirf store login ke liye — hum save nahi karte.
+            </p>
+</section>
+</main>
+<!-- Navigation omitted as this is a transactional/linear screen -->
+</body></html>

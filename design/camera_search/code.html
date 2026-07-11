@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Camera Capture - ShopMandate</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-tint": "#563bed",
+                      "on-primary-fixed": "#160066",
+                      "surface-container-high": "#ede4fc",
+                      "primary-fixed-dim": "#c6bfff",
+                      "on-surface-variant": "#474556",
+                      "error": "#ba1a1a",
+                      "surface-container-highest": "#e7dff6",
+                      "primary-container": "#4f32e7",
+                      "outline": "#787587",
+                      "primary-fixed": "#e4dfff",
+                      "secondary-container": "#fe693c",
+                      "tertiary": "#004b2f",
+                      "background": "#fdf7ff",
+                      "error-container": "#ffdad6",
+                      "surface-bright": "#fdf7ff",
+                      "inverse-surface": "#322e3f",
+                      "on-tertiary-fixed": "#002112",
+                      "on-tertiary": "#ffffff",
+                      "inverse-on-surface": "#f5eeff",
+                      "surface-container-low": "#f8f1ff",
+                      "on-primary-fixed-variant": "#3d10d7",
+                      "inverse-primary": "#c6bfff",
+                      "on-secondary": "#ffffff",
+                      "on-primary-container": "#cfc8ff",
+                      "on-tertiary-container": "#60e6a6",
+                      "surface-container": "#f3eaff",
+                      "tertiary-container": "#006541",
+                      "on-secondary-fixed-variant": "#862200",
+                      "on-primary": "#ffffff",
+                      "surface": "#fdf7ff",
+                      "on-surface": "#1d1929",
+                      "tertiary-fixed": "#76fbb9",
+                      "on-secondary-container": "#601600",
+                      "surface-container-lowest": "#ffffff",
+                      "on-background": "#1d1929",
+                      "secondary-fixed-dim": "#ffb59f",
+                      "on-secondary-fixed": "#3b0a00",
+                      "surface-variant": "#e7dff6",
+                      "outline-variant": "#c8c4d9",
+                      "on-error-container": "#93000a",
+                      "secondary": "#ae3104",
+                      "secondary-fixed": "#ffdbd1",
+                      "on-tertiary-fixed-variant": "#005234",
+                      "surface-dim": "#dfd6ed",
+                      "tertiary-fixed-dim": "#57de9f",
+                      "primary": "#3600cd",
+                      "on-error": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "container-padding": "20px",
+                      "stack-md": "24px",
+                      "gutter": "16px",
+                      "stack-lg": "40px",
+                      "stack-sm": "12px",
+                      "base": "8px"
+              },
+              "fontFamily": {
+                      "headline-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "label-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "caption": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "body-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "body-lg": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "headline-lg": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "headline-lg-mobile": [
+                              "Plus Jakarta Sans"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "caption": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+      </style>
+</head>
+<body class="bg-background text-on-background font-body-md h-screen w-full overflow-hidden flex flex-col relative">
+<!-- Top App Bar - Using Semantic Intent for Settings/Profile to suppress it. Wait, it's a focused task (Camera). 
+         The prompt says "Full-screen camera viewfinder", so we hide global nav. 
+         But we still need a back button to exit the task. -->
+<header class="absolute top-0 left-0 right-0 z-50 flex justify-between items-center px-container-padding py-stack-md bg-gradient-to-b from-black/50 to-transparent">
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-surface-container-lowest/40 transition-colors">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<div class="bg-surface-container-lowest/80 backdrop-blur-md px-4 py-2 rounded-full shadow-sm">
+<span class="font-label-md text-label-md text-on-surface">Jo chahiye uspe camera point karo</span>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-surface-container-lowest/40 transition-colors">
+<span class="material-symbols-outlined" data-icon="flash_off">flash_off</span>
+</button>
+</header>
+<!-- Camera Viewfinder (Simulated) -->
+<main class="flex-grow relative bg-black rounded-b-[40px] overflow-hidden">
+<!-- Live Camera Feed Simulation -->
+<div class="absolute inset-0 w-full h-full object-cover opacity-80" data-alt="A close-up shot of modern, sleek white wireless earbuds resting on a textured wooden table. The lighting is soft and natural, suggesting a daytime indoor setting. The focus is sharp on the earbuds, with a slightly blurred background to emphasize the product. The overall aesthetic is clean, minimal, and premium, fitting a modern light-mode shopping application context." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAoYZ-5T7QOoyHsbxr2S3ZwOBh39oi90iMElF0Ox-pLorHwuCvJUiTpmtPOdHRfinLxok1u2MEvkQvnaReK0Tze4yq1eABGPqoGc_TtZ5W0tqxn70TnOXh_NaLEDFWnDcuMssAMcGXiODK-BKFGhTclC6uKy1_aRn972pCnQ99klYvlPSKUQtPP8FXQNj7UG02BI0RCx9mL0znG13EH_FQ_BPPIPUdFTtZy2szvoGbsLXhg7s6zxmzg'); background-size: cover; background-position: center;">
+</div>
+<!-- Viewfinder Reticle -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<div class="w-64 h-64 border-2 border-white/50 rounded-3xl border-dashed"></div>
+</div>
+<!-- Post-Capture Overlay (Hidden by default, shown for demonstration) -->
+<div class="absolute bottom-32 left-0 right-0 px-container-padding flex flex-col items-center gap-stack-sm z-40 transition-all duration-300 transform translate-y-0 opacity-100" id="capture-overlay">
+<div class="bg-surface-container-lowest p-4 rounded-2xl shadow-lg w-full max-w-sm flex flex-col gap-4 animate-fade-in-up">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined" data-icon="check" data-weight="fill">check</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant">Dikha:</p>
+<p class="font-headline-md text-headline-md text-on-surface">Wireless earbuds jaisa</p>
+</div>
+</div>
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-4 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-md">
+                    Ye hi chahiye
+                    <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Bottom Controls -->
+<div class="absolute bottom-0 left-0 right-0 h-32 bg-black flex justify-between items-center px-8 z-50">
+<!-- Gallery -->
+<button class="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+<span class="material-symbols-outlined" data-icon="photo_library">photo_library</span>
+</button>
+<!-- Shutter Button -->
+<button class="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center relative active:scale-90 transition-transform" id="shutter-btn">
+<div class="w-16 h-16 bg-white rounded-full transition-all duration-200" id="shutter-inner"></div>
+</button>
+<!-- Flip Camera -->
+<button class="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+<span class="material-symbols-outlined" data-icon="flip_camera_ios">flip_camera_ios</span>
+</button>
+</div>
+<style>
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.4s ease-out forwards;
+        }
+    </style>
+<script>
+        // Simple interaction for the shutter button to toggle the overlay
+        const shutterBtn = document.getElementById('shutter-btn');
+        const shutterInner = document.getElementById('shutter-inner');
+        const overlay = document.getElementById('capture-overlay');
+
+        shutterBtn.addEventListener('mousedown', () => {
+            shutterInner.classList.remove('w-16', 'h-16');
+            shutterInner.classList.add('w-14', 'h-14');
+        });
+
+        shutterBtn.addEventListener('mouseup', () => {
+            shutterInner.classList.add('w-16', 'h-16');
+            shutterInner.classList.remove('w-14', 'h-14');
+            
+            // Toggle overlay for demo purposes
+            if(overlay.classList.contains('opacity-0')) {
+                overlay.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+                overlay.classList.add('opacity-100', 'translate-y-0');
+            } else {
+                 overlay.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+                overlay.classList.remove('opacity-100', 'translate-y-0');
+            }
+        });
+        
+        // Hide overlay initially
+        overlay.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+        overlay.classList.remove('opacity-100', 'translate-y-0');
+    </script>
+</body></html>

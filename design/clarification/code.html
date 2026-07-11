@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Voice Shopping Assistant - Understanding Screen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#563bed",
+                        "on-primary-fixed": "#160066",
+                        "surface-container-high": "#ede4fc",
+                        "primary-fixed-dim": "#c6bfff",
+                        "on-surface-variant": "#474556",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#e7dff6",
+                        "primary-container": "#4f32e7",
+                        "outline": "#787587",
+                        "primary-fixed": "#e4dfff",
+                        "secondary-container": "#fe693c",
+                        "tertiary": "#004b2f",
+                        "background": "#fdf7ff",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#fdf7ff",
+                        "inverse-surface": "#322e3f",
+                        "on-tertiary-fixed": "#002112",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#f5eeff",
+                        "surface-container-low": "#f8f1ff",
+                        "on-primary-fixed-variant": "#3d10d7",
+                        "inverse-primary": "#c6bfff",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#cfc8ff",
+                        "on-tertiary-container": "#60e6a6",
+                        "surface-container": "#f3eaff",
+                        "tertiary-container": "#006541",
+                        "on-secondary-fixed-variant": "#862200",
+                        "on-primary": "#ffffff",
+                        "surface": "#fdf7ff",
+                        "on-surface": "#1d1929",
+                        "tertiary-fixed": "#76fbb9",
+                        "on-secondary-container": "#601600",
+                        "surface-container-lowest": "#ffffff",
+                        "on-background": "#1d1929",
+                        "secondary-fixed-dim": "#ffb59f",
+                        "on-secondary-fixed": "#3b0a00",
+                        "surface-variant": "#e7dff6",
+                        "outline-variant": "#c8c4d9",
+                        "on-error-container": "#93000a",
+                        "secondary": "#ae3104",
+                        "secondary-fixed": "#ffdbd1",
+                        "on-tertiary-fixed-variant": "#005234",
+                        "surface-dim": "#dfd6ed",
+                        "tertiary-fixed-dim": "#57de9f",
+                        "primary": "#3600cd",
+                        "on-error": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "2xl": "1rem",
+                        "3xl": "1.5rem"
+                    },
+                    "spacing": {
+                        "container-padding": "20px",
+                        "stack-md": "24px",
+                        "gutter": "16px",
+                        "stack-lg": "40px",
+                        "stack-sm": "12px",
+                        "base": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "caption": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .soft-shadow {
+            box-shadow: 0 8px 30px rgba(79, 50, 231, 0.06);
+        }
+        .message-bubble-bot {
+            border-radius: 24px 24px 24px 4px;
+        }
+        .editable-chip {
+            transition: all 0.2s ease;
+        }
+        .editable-chip:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col relative selection:bg-primary-container selection:text-on-primary-container overflow-hidden md:justify-center md:items-center">
+<!-- Mobile Frame for Desktop View -->
+<div class="md:w-full md:max-w-[428px] md:h-[926px] md:max-h-[95vh] md:rounded-[40px] md:border-[12px] md:border-surface-container-highest md:overflow-hidden md:shadow-2xl flex flex-col relative w-full h-screen bg-background">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center px-container-padding py-stack-sm w-full bg-background flat no shadows z-10 docked full-width top-0">
+<div class="flex items-center gap-3 cursor-pointer group">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-surface-container-high group-hover:border-primary transition-colors">
+<img class="w-full h-full object-cover" data-alt="A close-up studio portrait of a friendly Indian woman with a warm smile, acting as a personal assistant avatar. The background is a clean, bright minimalist setting. The lighting is soft and flattering, highlighting a professional yet approachable demeanor." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBz_ngR-vVr15M_NFcPXKyynt7Pwua_zuRv4_5J5ruoynz9aogOxvU7yGbQbb2bI3Q8qv2MN-e5I9dE90GZoJ-WjNFNHbRxSkjEPKH8jPljtU6sUA2C9K0PTQpH6blAMDV1QdMTsfjOdo6NQaJ52XPD3l-0vTo8n4qH5GrPxdtL-eCwUZjuRIKfgTzC5e-avLMJqGwAqusA7N5iASNuBp6-6VneYrEqXSdHKMo15DStdtI0HGeEMQ6C"/>
+</div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed tracking-tight">ShopMandate</h1>
+</div>
+<button aria-label="Settings" class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:opacity-80 transition-opacity bg-surface-container-low">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+</button>
+</header>
+<!-- Main Chat Area -->
+<main class="flex-1 overflow-y-auto px-container-padding py-stack-md flex flex-col gap-6 relative z-0 pb-[120px]">
+<!-- Bot Message: Understanding Card -->
+<div class="flex flex-col gap-2 max-w-[90%]">
+<div class="bg-surface-container text-on-surface p-4 message-bubble-bot soft-shadow">
+<p class="font-body-md text-body-md mb-3 text-on-surface-variant">Here is what I understood so far. Tap to edit.</p>
+<div class="flex flex-wrap gap-2">
+<button class="editable-chip flex items-center gap-1 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 hover:border-primary transition-colors">
+<span class="font-label-md text-label-md text-on-surface">Wireless earbuds</span>
+<span class="material-symbols-outlined text-[16px] text-outline">edit</span>
+</button>
+<button class="editable-chip flex items-center gap-1 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 hover:border-primary transition-colors">
+<span class="font-label-md text-label-md text-on-surface">Budget ₹2000</span>
+<span class="material-symbols-outlined text-[16px] text-outline">edit</span>
+</button>
+<button class="editable-chip flex items-center gap-1 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 hover:border-primary transition-colors">
+<span class="font-label-md text-label-md text-on-surface">Qty 1</span>
+<span class="material-symbols-outlined text-[16px] text-outline">edit</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Bot Message: Follow up question -->
+<div class="flex flex-col gap-3 max-w-[90%] mt-2">
+<div class="flex items-end gap-2">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-surface-variant shrink-0 mb-1">
+<img class="w-full h-full object-cover" data-alt="A stylized 3D rendered avatar of a cute robot or smart assistant face, glowing softly in a high-key bright minimalist environment. The expression is attentive and helpful." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCuQ4GHaHeKBIfJOg4rtTA5VG9B6Bs3ngWElJIfGPKkMtKqCcz4u3fgP0EncCWM1yas_eqt44t5xlVsiG5UpcPXW3xtfIXP8cVNZ51sWtZMXEiGlz2n_cEAkEXDnIQpceG_WIqNk1j8hP5v0wboa1ZRV8E98eoMMnICF7ugTY2oGhyL_ZGc2MdU6Gu_wMr8dZQi_np3G_100WxaP6EtCTUKmYxuF4eGR4ucTjW3ijYucZcVPmWXHNwf"/>
+</div>
+<div class="bg-surface-container text-on-surface p-4 message-bubble-bot soft-shadow">
+<p class="font-body-lg text-body-lg text-on-background">Ek baat — wireless hi chahiye ya wired bhi chalega?</p>
+</div>
+</div>
+</div>
+<!-- Quick Reply Area (Bento-style layout) -->
+<div class="mt-4 flex flex-col gap-4">
+<div class="flex flex-col gap-2">
+<span class="font-caption text-caption text-outline uppercase tracking-wider pl-1">Type</span>
+<div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+<button class="shrink-0 bg-primary-container text-on-primary-container rounded-full px-5 py-2.5 font-label-md text-label-md shadow-[0_4px_12px_rgba(79,50,231,0.2)] active:scale-95 transition-all">
+                            Wireless
+                        </button>
+<button class="shrink-0 bg-surface-container text-on-surface rounded-full px-5 py-2.5 font-label-md text-label-md border border-outline-variant hover:bg-surface-variant active:scale-95 transition-all">
+                            Wired bhi ok
+                        </button>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<span class="font-caption text-caption text-outline uppercase tracking-wider pl-1">Adjust Budget</span>
+<div class="grid grid-cols-2 gap-3">
+<button class="bg-surface-container text-on-surface rounded-xl p-3 font-label-md text-label-md border border-outline-variant hover:border-primary active:scale-95 transition-all text-center">
+                            ₹1500
+                        </button>
+<button class="bg-primary-container/10 text-primary rounded-xl p-3 font-label-md text-label-md border border-primary active:scale-95 transition-all text-center">
+                            ₹2000
+                        </button>
+<button class="bg-surface-container text-on-surface rounded-xl p-3 font-label-md text-label-md border border-outline-variant hover:border-primary active:scale-95 transition-all text-center">
+                            ₹2500
+                        </button>
+<button class="bg-surface-container text-on-surface rounded-xl p-3 font-label-md text-label-md border border-outline-variant hover:border-primary active:scale-95 transition-all text-center flex items-center justify-center gap-1">
+                            Koi budget nahi
+                            <span class="material-symbols-outlined text-[16px]">all_inclusive</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Action Area -->
+<div class="absolute bottom-0 w-full glass-panel pt-4 pb-8 px-container-padding z-20 rounded-t-[32px] soft-shadow border-t border-surface-variant/50">
+<!-- Voice Input Hint -->
+<div class="flex items-center justify-center gap-2 mb-4 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px] animate-pulse">mic</span>
+<span class="font-caption text-caption">Tap or just say your choice</span>
+</div>
+<button class="w-full bg-primary text-on-primary rounded-full py-4 font-headline-md text-headline-md font-bold shadow-[0_8px_20px_rgba(54,0,205,0.25)] hover:shadow-[0_12px_24px_rgba(54,0,205,0.35)] active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                Aage badho
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">arrow_forward</span>
+</button>
+</div>
+</div>
+</body></html>

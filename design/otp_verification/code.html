@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ShopMandate - Verify OTP</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#004b2f",
+                        "on-surface": "#1d1929",
+                        "on-background": "#1d1929",
+                        "background": "#fdf7ff",
+                        "surface-container-low": "#f8f1ff",
+                        "surface-container-highest": "#e7dff6",
+                        "outline-variant": "#c8c4d9",
+                        "surface-container-high": "#ede4fc",
+                        "outline": "#787587",
+                        "secondary": "#ae3104",
+                        "primary": "#3600cd",
+                        "on-tertiary-container": "#60e6a6",
+                        "surface-container": "#f3eaff",
+                        "on-error": "#ffffff",
+                        "secondary-container": "#fe693c",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed": "#e4dfff",
+                        "primary-container": "#4f32e7",
+                        "on-primary-fixed-variant": "#3d10d7",
+                        "tertiary-fixed": "#76fbb9",
+                        "secondary-fixed-dim": "#ffb59f",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#f5eeff",
+                        "on-secondary-container": "#601600",
+                        "inverse-primary": "#c6bfff",
+                        "surface-dim": "#dfd6ed",
+                        "secondary-fixed": "#ffdbd1",
+                        "on-tertiary-fixed-variant": "#005234",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#cfc8ff",
+                        "inverse-surface": "#322e3f",
+                        "on-surface-variant": "#474556",
+                        "surface-tint": "#563bed",
+                        "surface-bright": "#fdf7ff",
+                        "error-container": "#ffdad6",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed": "#3b0a00",
+                        "on-primary": "#ffffff",
+                        "on-secondary-fixed-variant": "#862200",
+                        "surface-variant": "#e7dff6",
+                        "primary-fixed-dim": "#c6bfff",
+                        "on-tertiary-fixed": "#002112",
+                        "on-primary-fixed": "#160066",
+                        "surface": "#fdf7ff",
+                        "tertiary-container": "#006541",
+                        "tertiary-fixed-dim": "#57de9f",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-md": "24px",
+                        "gutter": "16px",
+                        "base": "8px",
+                        "stack-lg": "40px",
+                        "stack-sm": "12px",
+                        "container-padding": "20px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "caption": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "caption": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom hide number input spinners */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- Subtle Top Warm Gradient -->
+<div class="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-surface-container-high/50 to-transparent pointer-events-none -z-10"></div>
+<!-- Header (Simplified for Transactional Screen) -->
+<header class="w-full px-container-padding py-stack-sm flex items-center justify-between relative z-10">
+<button aria-label="Go back" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors focus:outline-none focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">arrow_back</span>
+</button>
+<div class="font-label-md text-label-md text-primary opacity-0 pointer-events-none">Help</div> <!-- Placeholder for balance -->
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col px-container-padding pt-stack-md pb-stack-lg max-w-md mx-auto w-full relative z-10">
+<!-- Typography Header -->
+<div class="mb-stack-lg">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-background mb-base">OTP daalo</h1>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                +91 98XXX-XX21 par code bheja hai<br/>
+<a class="text-primary font-label-md text-label-md hover:text-primary-container transition-colors inline-block mt-1" href="#">Number badlo</a>
+</p>
+</div>
+<!-- OTP Input Cluster -->
+<div class="mb-stack-md w-full">
+<div class="flex justify-between items-center gap-2 mb-stack-sm" id="otp-container">
+<input autofocus="" class="w-[14%] aspect-[4/5] rounded-xl border-2 border-primary bg-surface-container-lowest text-center font-headline-md text-headline-md text-on-background shadow-[0_4px_12px_rgb(54,0,205,0.08)] outline-none transition-all" maxlength="1" pattern="\d*" type="number"/>
+<input class="w-[14%] aspect-[4/5] rounded-xl border-2 border-outline-variant bg-surface-container-lowest text-center font-headline-md text-headline-md text-on-background focus:border-primary focus:shadow-[0_4px_12px_rgb(54,0,205,0.08)] outline-none transition-all" maxlength="1" pattern="\d*" type="number"/>
+<input class="w-[14%] aspect-[4/5] rounded-xl border-2 border-outline-variant bg-surface-container-lowest text-center font-headline-md text-headline-md text-on-background focus:border-primary focus:shadow-[0_4px_12px_rgb(54,0,205,0.08)] outline-none transition-all" maxlength="1" pattern="\d*" type="number"/>
+<input class="w-[14%] aspect-[4/5] rounded-xl border-2 border-outline-variant bg-surface-container-lowest text-center font-headline-md text-headline-md text-on-background focus:border-primary focus:shadow-[0_4px_12px_rgb(54,0,205,0.08)] outline-none transition-all" maxlength="1" pattern="\d*" type="number"/>
+<input class="w-[14%] aspect-[4/5] rounded-xl border-2 border-outline-variant bg-surface-container-lowest text-center font-headline-md text-headline-md text-on-background focus:border-primary focus:shadow-[0_4px_12px_rgb(54,0,205,0.08)] outline-none transition-all" maxlength="1" pattern="\d*" type="number"/>
+<input class="w-[14%] aspect-[4/5] rounded-xl border-2 border-outline-variant bg-surface-container-lowest text-center font-headline-md text-headline-md text-on-background focus:border-primary focus:shadow-[0_4px_12px_rgb(54,0,205,0.08)] outline-none transition-all" maxlength="1" pattern="\d*" type="number"/>
+</div>
+<!-- Timer / Resend -->
+<div class="flex justify-between items-center px-1">
+<span class="font-caption text-caption text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] opacity-70" style="font-variation-settings: 'wght' 300;">schedule</span>
+                    Resend in 0:24
+                </span>
+<button class="font-label-md text-label-md text-outline opacity-60 cursor-not-allowed" disabled="">Resend OTP</button>
+</div>
+</div>
+<!-- Flexible Spacer to push CTA to bottom on mobile, or keep it close on larger screens -->
+<div class="flex-grow min-h-[40px]"></div>
+<!-- Call to Action -->
+<div class="w-full flex flex-col items-center gap-stack-md mt-auto">
+<button class="w-full py-4 px-6 rounded-full bg-secondary-container text-on-secondary-container font-headline-md text-[18px] leading-[24px] font-bold shadow-[0_8px_20px_rgb(254,105,60,0.25)] hover:bg-secondary transition-all active:scale-[0.98] active:shadow-md flex items-center justify-center gap-2 group">
+                Verify &amp; Connect
+                <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" style="font-variation-settings: 'wght' 600;">arrow_forward</span>
+</button>
+<!-- Success Hint Badge -->
+<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-tertiary-container/10 border border-tertiary-container/20">
+<div class="w-5 h-5 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'wght' 700;">check</span>
+</div>
+<span class="font-label-md text-label-md text-tertiary-container">Zepto connected</span>
+</div>
+</div>
+</main>
+<script>
+        // Simple script to handle OTP input focus flow
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('otp-container');
+            const inputs = container.querySelectorAll('input');
+
+            inputs.forEach((input, index) => {
+                // Focus styling handler
+                input.addEventListener('focus', () => {
+                    input.classList.remove('border-outline-variant');
+                    input.classList.add('border-primary', 'shadow-[0_4px_12px_rgb(54,0,205,0.08)]');
+                });
+
+                input.addEventListener('blur', () => {
+                    if (input.value === '') {
+                        input.classList.add('border-outline-variant');
+                        input.classList.remove('border-primary', 'shadow-[0_4px_12px_rgb(54,0,205,0.08)]');
+                    }
+                });
+
+                // Auto-advance
+                input.addEventListener('input', (e) => {
+                    if (e.target.value.length > 1) {
+                        e.target.value = e.target.value.slice(0, 1);
+                    }
+                    if (e.target.value !== '' && index < inputs.length - 1) {
+                        inputs[index + 1].focus();
+                    }
+                });
+
+                // Handle backspace
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                        inputs[index - 1].focus();
+                    }
+                });
+            });
+        });
+    </script>
+</body></html>
