@@ -120,6 +120,10 @@ data class ResearchResponse(val note: String, val quotesConsidered: Int = 0)
 @Serializable
 data class LiveQuotesEvent(val quotes: List<Quote> = emptyList())
 
+// ---- Live voice order-history event ({"type":"orders","orders":[...]}) ----
+@Serializable
+data class LiveOrdersEvent(val orders: List<OrderDto> = emptyList())
+
 // ---- Live voice multi-item cart (Phase B) ----
 @Serializable
 data class LiveCartItem(
