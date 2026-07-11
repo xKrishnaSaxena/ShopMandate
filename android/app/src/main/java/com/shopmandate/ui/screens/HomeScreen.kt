@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -26,8 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Autorenew
@@ -42,7 +39,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -60,7 +56,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,13 +89,11 @@ fun HomeScreen(
     onProfile: () -> Unit = {},
     onSettings: () -> Unit = {},
     onReorder: () -> Unit = {},
-    onTextSubmit: (String) -> Unit = {},
 ) {
     val connected = connectedStores.isNotEmpty()
     val firstName = userName.trim().split(" ").firstOrNull().orEmpty()
     var logoTaps by remember { mutableStateOf(0) }
     var showDevDialog by remember { mutableStateOf(false) }
-    var typed by remember { mutableStateOf("") }
     val pulse = rememberInfiniteTransition(label = "pulse")
     val scale by pulse.animateFloat(
         initialValue = 1f,
@@ -114,7 +107,6 @@ fun HomeScreen(
             .fillMaxSize()
             .background(AppBg)
             .systemBarsPadding()
-            .imePadding()
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -308,28 +300,24 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.weight(1f))
-        // ---- Bottom "type" input (works when connected; Enter/Search → submit) ----
-        OutlinedTextField(
-            value = typed,
-            onValueChange = { typed = it },
-            enabled = connected,
+        // ---- Bottom "type" pill (de-emphasised) ----
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
-            placeholder = { Text("…ya type karo", color = InkMuted) },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = InkMuted) },
             shape = RoundedCornerShape(50),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = {
-                    if (typed.isNotBlank()) {
-                        onTextSubmit(typed.trim())
-                        typed = ""
-                    }
-                },
-            ),
-        )
+            color = AppSurface,
+            border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.25f)),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null, tint = InkMuted)
+                Spacer(Modifier.width(10.dp))
+                Text("…ya type karo", color = InkMuted, fontSize = 15.sp)
+            }
+        }
 
         if (showDevDialog) {
             DevUrlDialog(onDismiss = { showDevDialog = false })
