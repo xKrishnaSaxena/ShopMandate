@@ -32,7 +32,7 @@ def _build() -> list[Merchant]:
         RealMerchant("zepto", "Zepto", "https://mcp.zepto.co.in/mcp",
                      "tools:read tools:write", price_in_paise=True, delivery="~10 min"),
         RealMerchant("instamart", "Swiggy Instamart", "https://mcp.swiggy.com/im",
-                     "mcp:tools mcp:resources", price_in_paise=True, delivery="~15 min"),
+                     "mcp:tools mcp:resources", price_in_paise=False, delivery="~15 min"),
         MockMerchant("blinkit", "Blinkit", _MOCK_BLINKIT),
         MockMerchant("store_a", "Store A", _MOCK_A),
         MockMerchant("store_b", "Store B", _MOCK_B),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load backend/.env (GOOGLE_API_KEY=...) before importing modules that read env.
@@ -49,6 +49,21 @@ def _session(fn):
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True, "flash": os.environ.get("FLASH_MODEL", "gemini-flash-latest")}
+
+
+@app.websocket("/ws/live")
+async def ws_live(ws: WebSocket) -> None:
+    """Real-time voice shopping agent (Gemini Live)."""
+    await ws.accept()
+    from . import live
+    try:
+        await live.bridge(ws)
+    except Exception as e:  # noqa: BLE001
+        print(f"[ws_live] {e}")
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 @app.post("/api/session/start")

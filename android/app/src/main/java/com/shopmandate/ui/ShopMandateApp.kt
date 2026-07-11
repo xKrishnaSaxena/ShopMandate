@@ -34,6 +34,7 @@ import com.shopmandate.ui.screens.ClarifyScreen
 import com.shopmandate.ui.screens.ComparingScreen
 import com.shopmandate.ui.screens.ConnectScreen
 import com.shopmandate.ui.screens.HomeScreen
+import com.shopmandate.ui.screens.LiveScreen
 import com.shopmandate.ui.screens.OrdersScreen
 import com.shopmandate.ui.screens.OtpScreen
 import com.shopmandate.ui.screens.PayScreen
@@ -61,13 +62,19 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
     val loading by vm.loading.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
 
+    val liveConnected by vm.liveConnected.collectAsStateWithLifecycle()
+    val liveStatus by vm.liveStatus.collectAsStateWithLifecycle()
+    val liveUserText by vm.liveUserText.collectAsStateWithLifecycle()
+    val liveAgentText by vm.liveAgentText.collectAsStateWithLifecycle()
+    val liveQuotes by vm.liveQuotes.collectAsStateWithLifecycle()
+
     Box(Modifier.fillMaxSize()) {
         when (screen) {
             Screen.Home -> HomeScreen(
                 connectedStores = connectedStores,
                 userName = profile.name,
                 reorderSuggestion = reorder,
-                onMicClick = vm::goVoice,
+                onMicClick = vm::startLive,      // mic → real-time Live voice agent
                 onCameraClick = vm::goCamera,
                 onSuggestionClick = vm::startText,   // tap chip → direct text search
                 onConnectStores = vm::goConnect,
@@ -84,7 +91,9 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 budgetInr = intent?.budgetInr,
                 qty = intent?.qty ?: 1,
                 question = clarifyQuestion,
-                onNext = vm::search,             // "Aage badho" → real store search
+                quickReplies = intent?.quickReplies ?: emptyList(),
+                budgetRelevant = intent?.budgetRelevant ?: true,
+                onNext = vm::submitClarify,      // apply choice/budget → real store search
                 onBack = vm::goVoice,
             )
             Screen.Comparing -> ComparingScreen(
@@ -103,6 +112,7 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
                 qty = cart?.qty ?: intent?.qty ?: 1,
                 reason = winner?.why ?: "Best value chuna",
                 delivery = cart?.delivery ?: "jaldi",
+                imageUrl = quotes.firstOrNull { it.store == winner?.store }?.imageUrl,
                 visualB64 = visualB64,
                 onApprove = vm::goPay,
                 onReject = vm::goComparing,
@@ -138,6 +148,14 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
             Screen.Orders ->
                 if (orders.isEmpty()) OrdersScreen(onBack = vm::goHome)
                 else OrdersScreen(orders = orders, onBack = vm::goHome)
+            Screen.Live -> LiveScreen(
+                status = liveStatus,
+                connected = liveConnected,
+                userText = liveUserText,
+                agentText = liveAgentText,
+                quotes = liveQuotes,
+                onStop = vm::stopLive,
+            )
             Screen.Profile -> ProfileScreen(
                 name = profile.name,
                 phone = profile.phone,
