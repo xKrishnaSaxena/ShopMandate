@@ -1,0 +1,15 @@
+[project]
+name = "shopmandate-backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.139.0",
+    "google-genai>=2.11.0",
+    "httpx>=0.28.1",
+    "mcp>=1.28.1",
+    "pydantic>=2.13.4",
+    "python-multipart>=0.0.32",
+    "uvicorn[standard]>=0.51.0",
+]
