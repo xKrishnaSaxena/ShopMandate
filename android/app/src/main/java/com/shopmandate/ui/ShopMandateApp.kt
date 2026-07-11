@@ -39,6 +39,7 @@ fun ShopMandateApp(vm: ShopViewModel = viewModel()) {
             onProfile = vm::goProfile,
             onSettings = vm::goConnect,   // gear → manage stores (Connect)
             onReorder = vm::onReorder,
+            onTextSubmit = vm::onTextInput,
         )
         Screen.Voice -> VoiceScreen(onStop = vm::onAudioCaptured, onCancel = vm::goHome)
         Screen.Camera -> CameraScreen(onCaptured = vm::onImageCaptured, onClose = vm::goHome)

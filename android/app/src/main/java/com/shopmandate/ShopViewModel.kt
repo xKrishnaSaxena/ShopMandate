@@ -69,15 +69,26 @@ class ShopViewModel : ViewModel() {
         private set
     var capturedAudioB64: String? = null
         private set
+    var capturedText: String? = null
+        private set
 
     fun onImageCaptured(b64: String) {
         capturedImageB64 = b64
         capturedAudioB64 = null
+        capturedText = null
         goClarify()
     }
 
     fun onAudioCaptured(b64: String) {
         capturedAudioB64 = b64
+        capturedImageB64 = null
+        capturedText = null
+        goClarify()
+    }
+
+    fun onTextInput(text: String) {
+        capturedText = text
+        capturedAudioB64 = null
         capturedImageB64 = null
         goClarify()
     }
