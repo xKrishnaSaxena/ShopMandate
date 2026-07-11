@@ -1,13 +1,34 @@
 package com.shopmandate
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.media.MediaPlayer
+import android.util.Base64
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.shopmandate.net.ApiClient
+import com.shopmandate.net.ApiService
+import com.shopmandate.net.Cart
+import com.shopmandate.net.ClarifyAnswers
+import com.shopmandate.net.ClarifyRequest
+import com.shopmandate.net.ConnectStartRequest
+import com.shopmandate.net.ConnectVerifyRequest
+import com.shopmandate.net.Intent
+import com.shopmandate.net.OrderDto
+import com.shopmandate.net.PayRequest
+import com.shopmandate.net.Quote
+import com.shopmandate.net.Receipt
+import com.shopmandate.net.SayRequest
+import com.shopmandate.net.StartRequest
+import com.shopmandate.net.StartResponse
+import com.shopmandate.net.VisualizeRequest
+import com.shopmandate.net.Winner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.io.File
 
-/**
- * The flow state machine. Nav is a sealed [Screen] switched on in ShopMandateApp.
- */
+/** The flow state machine. Nav is a sealed [Screen] switched on in ShopMandateApp. */
 sealed interface Screen {
     data object Home : Screen
     data object Voice : Screen
@@ -23,30 +44,61 @@ sealed interface Screen {
     data object Profile : Screen
 }
 
-/** Basic user profile. `name` is (later) passed to the agent so it addresses the user by name. */
 data class UserProfile(val name: String, val phone: String)
 
-class ShopViewModel : ViewModel() {
+class ShopViewModel(app: Application) : AndroidViewModel(app) {
+
+    private var api: ApiService = ApiClient.create(getApplication())
+    /** Call after changing the base URL in the dev dialog. */
+    fun refreshApi() { api = ApiClient.create(getApplication()) }
+
+    // ---- navigation ----
     private val _screen = MutableStateFlow<Screen>(Screen.Home)
     val screen: StateFlow<Screen> = _screen.asStateFlow()
 
-    // Each store connects SEPARATELY (its own OAuth + OTP, e.g. Zepto vs Swiggy).
-    // Shopping unlocks once at least one store is connected.
     private val _connectedStores = MutableStateFlow<Set<String>>(emptySet())
     val connectedStores: StateFlow<Set<String>> = _connectedStores.asStateFlow()
 
-    // Which store's OTP is currently being entered (shown on the OTP screen).
     var connectingStore: String? = null
         private set
 
-    // User profile — greet by name on Home, and (later) pass name to the agent in /session/start.
     private val _profile = MutableStateFlow(UserProfile(name = "Ravi Kumar", phone = "9876543210"))
     val profile: StateFlow<UserProfile> = _profile.asStateFlow()
 
-    // Reorder suggestion from order memory (backend will set this; seeded for the demo).
     private val _reorderSuggestion = MutableStateFlow<String?>("boAt Airdopes 141 — pichli baar ₹1,800 mein")
     val reorderSuggestion: StateFlow<String?> = _reorderSuggestion.asStateFlow()
 
+    // ---- backend-driven state ----
+    var sessionId: String? = null
+        private set
+    private val _intent = MutableStateFlow<Intent?>(null)
+    val intent: StateFlow<Intent?> = _intent.asStateFlow()
+    private val _transcript = MutableStateFlow<String?>(null)
+    val transcript: StateFlow<String?> = _transcript.asStateFlow()
+    private val _clarifyQuestion = MutableStateFlow<String?>(null)
+    val clarifyQuestion: StateFlow<String?> = _clarifyQuestion.asStateFlow()
+    private val _quotes = MutableStateFlow<List<Quote>>(emptyList())
+    val quotes: StateFlow<List<Quote>> = _quotes.asStateFlow()
+    private val _winner = MutableStateFlow<Winner?>(null)
+    val winner: StateFlow<Winner?> = _winner.asStateFlow()
+    private val _cart = MutableStateFlow<Cart?>(null)
+    val cart: StateFlow<Cart?> = _cart.asStateFlow()
+    private val _haggleSteps = MutableStateFlow<List<String>>(emptyList())
+    val haggleSteps: StateFlow<List<String>> = _haggleSteps.asStateFlow()
+    private val _receipt = MutableStateFlow<Receipt?>(null)
+    val receipt: StateFlow<Receipt?> = _receipt.asStateFlow()
+    private val _orders = MutableStateFlow<List<OrderDto>>(emptyList())
+    val orders: StateFlow<List<OrderDto>> = _orders.asStateFlow()
+    private val _loading = MutableStateFlow<String?>(null)
+    val loading: StateFlow<String?> = _loading.asStateFlow()
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _visualB64 = MutableStateFlow<String?>(null)
+    val visualB64: StateFlow<String?> = _visualB64.asStateFlow()
+    private val _researchNote = MutableStateFlow<String?>(null)
+    val researchNote: StateFlow<String?> = _researchNote.asStateFlow()
+
+    // ---- nav helpers (used by screens) ----
     fun goHome() { _screen.value = Screen.Home }
     fun goVoice() { _screen.value = Screen.Voice }
     fun goCamera() { _screen.value = Screen.Camera }
@@ -56,44 +108,140 @@ class ShopViewModel : ViewModel() {
     fun goConnect() { _screen.value = Screen.Connect }
     fun goPay() { _screen.value = Screen.Pay }
     fun goSuccess() { _screen.value = Screen.Success }
-    fun goOrders() { _screen.value = Screen.Orders }
+    fun goOrders() { loadOrders(); _screen.value = Screen.Orders }
     fun goProfile() { _screen.value = Screen.Profile }
-    fun onReorder() { _screen.value = Screen.Approve } // 1-tap reorder → straight to the cart
+    fun onReorder() { _screen.value = Screen.Approve }
+    fun clearError() { _error.value = null }
 
     fun updateProfile(name: String, phone: String) {
         _profile.value = UserProfile(name = name.ifBlank { _profile.value.name }, phone = phone)
     }
 
-    // Captured multimodal input (base64), ready to POST to /session/start when the backend is wired.
+    // captured multimodal input (base64)
     var capturedImageB64: String? = null
         private set
     var capturedAudioB64: String? = null
         private set
 
-    fun onImageCaptured(b64: String) {
-        capturedImageB64 = b64
-        capturedAudioB64 = null
-        goClarify()
+    // ---- backend flow ----
+    fun startText(text: String) = job("Samajh raha hoon…") {
+        applyStart(api.start(StartRequest(inputType = "text", text = text, userName = _profile.value.name)))
     }
 
     fun onAudioCaptured(b64: String) {
+        if (b64.isBlank()) { _error.value = "Recording nahi hui — mic permission check karo"; return }
         capturedAudioB64 = b64
-        capturedImageB64 = null
-        goClarify()
+        // Tell Gemini the real format (raw AAC), else it defaults to audio/wav and misreads.
+        val payload = if (b64.startsWith("data:")) b64 else "data:audio/aac;base64,$b64"
+        job("Sun raha hoon…") {
+            applyStart(api.start(StartRequest(inputType = "voice", audioB64 = payload, userName = _profile.value.name)))
+        }
     }
 
-    /** Start connecting a specific store → that store's own OTP. */
-    fun startConnect(store: String) {
+    fun onImageCaptured(b64: String) {
+        if (b64.isBlank()) { _error.value = "Photo capture nahi hui"; return }
+        capturedImageB64 = b64
+        val payload = if (b64.startsWith("data:")) b64 else "data:image/jpeg;base64,$b64"
+        job("Dekh raha hoon…") {
+            applyStart(api.start(StartRequest(inputType = "photo", imageB64 = payload, userName = _profile.value.name)))
+        }
+    }
+
+    private fun applyStart(r: StartResponse) {
+        sessionId = r.sessionId
+        _intent.value = r.parsedIntent
+        _transcript.value = r.transcript
+        _clarifyQuestion.value = r.clarifyingQuestion
+        _screen.value = Screen.Clarify   // Clarify screen shows parsed intent + (if any) the question
+    }
+
+    fun clarify(type: String?, budgetInr: Int?) = job("…") {
+        val id = sessionId ?: return@job
+        val r = api.clarify(id, ClarifyRequest(ClarifyAnswers(type = type, budgetInr = budgetInr)))
+        _intent.value = r.parsedIntent
+    }
+
+    fun search() = job("Stores compare kar raha hoon…") {
+        val id = sessionId ?: return@job
+        val r = api.search(id)
+        _quotes.value = r.quotes
+        _winner.value = r.winner
+        _cart.value = r.cart
+        _haggleSteps.value = r.steps
+        _screen.value = Screen.Comparing
+    }
+
+    fun startConnect(store: String) = job(null) {
         connectingStore = store
+        api.connectStart(store, ConnectStartRequest(phone = _profile.value.phone))
         _screen.value = Screen.Otp
     }
 
-    /** OTP verified for [connectingStore]: mark it connected, return to the connect list. */
-    fun onOtpVerified() {
-        connectingStore?.let { store ->
-            _connectedStores.value = _connectedStores.value + store
-        }
+    fun onOtpVerified() = job(null) {
+        val store = connectingStore ?: return@job
+        val r = api.connectVerify(store, ConnectVerifyRequest(otp = "123456"))
+        _connectedStores.value = r.connectedStores.toSet()
         connectingStore = null
         _screen.value = Screen.Connect
+    }
+
+    fun pay(upiApp: String = "gpay") = job("Payment ho raha hai…") {
+        val id = sessionId ?: return@job
+        val r = api.pay(id, PayRequest(upiApp = upiApp))
+        _receipt.value = r.receipt
+        _screen.value = Screen.Success
+    }
+
+    fun loadOrders() = job(null) { _orders.value = api.orders().orders }
+
+    // ---- wow-factors ----
+    /** Agent speaks the given line (Hinglish TTS). */
+    fun speak(text: String) = job(null) { playWav(api.say(SayRequest(text)).audioB64) }
+
+    /** Generate a Nano-Banana product visual for the current cart/intent. */
+    fun visualize() = job(null) {
+        val product = _cart.value?.item ?: _intent.value?.product ?: return@job
+        _visualB64.value = api.visualize(VisualizeRequest(product = product)).imageB64
+    }
+
+    /** Deep-research "best value" one-liner. */
+    fun loadResearch() = job(null) {
+        val id = sessionId ?: return@job
+        _researchNote.value = api.research(id).note
+    }
+
+    // ---- infra ----
+    private var player: MediaPlayer? = null
+
+    private fun playWav(b64: String) {
+        try {
+            val bytes = Base64.decode(b64, Base64.DEFAULT)
+            val f = File(getApplication<Application>().cacheDir, "say.wav")
+            f.writeBytes(bytes)
+            player?.release()
+            player = MediaPlayer().apply {
+                setDataSource(f.absolutePath)
+                prepare()
+                start()
+            }
+        } catch (_: Exception) {
+            // audio is best-effort
+        }
+    }
+
+    private fun job(loadingMsg: String?, block: suspend () -> Unit) = viewModelScope.launch {
+        _error.value = null
+        if (loadingMsg != null) _loading.value = loadingMsg
+        try {
+            block()
+        } catch (e: Exception) {
+            _error.value = e.message ?: "Kuch galat hua — backend chal raha hai?"
+        }
+        _loading.value = null
+    }
+
+    override fun onCleared() {
+        player?.release()
+        super.onCleared()
     }
 }

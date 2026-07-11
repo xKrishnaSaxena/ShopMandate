@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.util.concurrent.TimeUnit
 
 /**
  * Builds the [ApiService]. Base URL comes from [DevConfig] (overridable at runtime via the
@@ -29,10 +30,16 @@ object ApiClient {
 
     fun create(baseUrl: String): ApiService {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // BASIC, not BODY — audio/image payloads are huge base64 and BODY logging stalls the call.
+            level = HttpLoggingInterceptor.Level.BASIC
         }
         val client = OkHttpClient.Builder()
             .addInterceptor(logging)
+            // Gemini multimodal (audio transcription, image identify, TTS, Nano-Banana) is slow.
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(150, TimeUnit.SECONDS)
             .build()
         return Retrofit.Builder()
             .baseUrl(baseUrl)

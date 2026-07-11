@@ -35,14 +35,17 @@ import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,11 +92,13 @@ fun HomeScreen(
     onProfile: () -> Unit = {},
     onSettings: () -> Unit = {},
     onReorder: () -> Unit = {},
+    onSubmitText: (String) -> Unit = {},
 ) {
     val connected = connectedStores.isNotEmpty()
     val firstName = userName.trim().split(" ").firstOrNull().orEmpty()
     var logoTaps by remember { mutableStateOf(0) }
     var showDevDialog by remember { mutableStateOf(false) }
+    var showTypeDialog by remember { mutableStateOf(false) }
     val pulse = rememberInfiniteTransition(label = "pulse")
     val scale by pulse.animateFloat(
         initialValue = 1f,
@@ -300,11 +305,12 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.weight(1f))
-        // ---- Bottom "type" pill (de-emphasised) ----
+        // ---- Bottom "type" pill → opens text input ----
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 16.dp)
+                .clickable { if (connected) showTypeDialog = true else onConnectStores() },
             shape = RoundedCornerShape(50),
             color = AppSurface,
             border = BorderStroke(1.dp, InkMuted.copy(alpha = 0.25f)),
@@ -322,7 +328,45 @@ fun HomeScreen(
         if (showDevDialog) {
             DevUrlDialog(onDismiss = { showDevDialog = false })
         }
+        if (showTypeDialog) {
+            TypeInputDialog(
+                onSubmit = { text ->
+                    showTypeDialog = false
+                    onSubmitText(text)
+                },
+                onDismiss = { showTypeDialog = false },
+            )
+        }
     }
+}
+
+@Composable
+private fun TypeInputDialog(onSubmit: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Kya chahiye?", fontWeight = FontWeight.Bold) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = false,
+                placeholder = { Text("e.g. wireless earbuds under 2000") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { if (text.isNotBlank()) onSubmit(text.trim()) },
+                colors = ButtonDefaults.buttonColors(containerColor = Brand),
+            ) {
+                Text("Search  →", color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = InkMuted) }
+        },
+    )
 }
 
 @Preview(showBackground = true, showSystemUi = true, name = "Home – not connected")

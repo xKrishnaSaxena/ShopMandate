@@ -32,6 +32,8 @@ class Session:
 
 
 SESSIONS: dict[str, Session] = {}
+_CONNECTED_STORES: set[str] = set()   # store-scoped connections (Android uses these)
+_ORDERS: list[dict] = []              # order history for GET /api/orders
 
 
 def _get(session_id: str) -> Session:
@@ -190,6 +192,33 @@ def connect_verify(session_id: str, otp: str) -> dict:
     return {"status": "connected", "store": "Zepto"}
 
 
+# ---- store-scoped connect (what the Android app calls) ----
+def store_connect_start(store: str, phone: str) -> dict:
+    return {"status": "otp_sent", "store": store, "masked_phone": connect.start_otp(phone)}
+
+
+def store_connect_verify(store: str, otp: str) -> dict:
+    if not connect.verify(otp):
+        return {"status": "invalid_otp", "store": store,
+                "connected_stores": sorted(_CONNECTED_STORES)}
+    _CONNECTED_STORES.add(store)
+    return {"status": "connected", "store": store,
+            "connected_stores": sorted(_CONNECTED_STORES)}
+
+
+def orders() -> dict:
+    return {"orders": list(reversed(_ORDERS))}
+
+
+def _record_order(cart, order_id: str) -> None:
+    from datetime import date
+    _ORDERS.append({
+        "product": cart.item, "store": cart.store, "price_inr": cart.price_inr,
+        "order_id": order_id, "date": date.today().isoformat(),
+        "status": "confirmed", "delivered": False,
+    })
+
+
 # ---- P3P mandate + pre-auth (edge #1) ----
 async def create_mandate(session_id: str, mobile: str, cap_inr: int) -> dict:
     """One-time human approval of a UPI spend cap; after this the agent pays autonomously."""
@@ -236,6 +265,7 @@ async def pay(session_id: str, req: PayReq, auto: bool = False) -> dict:
         cap = await p3p.capture(s.mobile, cart.price_inr, cart.store, f"SM-{session_id[:4]}")
         if cap.get("status") == "captured":
             receipt = await payment.charge(cart, "P3P · UPI ReservePay", audit)
+            _record_order(cart, receipt.order_id)
             body = {"status": "complete", "order_id": receipt.order_id,
                     "receipt": {**receipt.model_dump(), "paid_via": f"P3P · {cap['rail']}",
                                 "p3p": cap}}
@@ -245,4 +275,5 @@ async def pay(session_id: str, req: PayReq, auto: bool = False) -> dict:
 
     # fallback: mock UPI (framed)
     receipt = await payment.charge(cart, req.upi_app, audit)
+    _record_order(cart, receipt.order_id)
     return {"status": "complete", "order_id": receipt.order_id, "receipt": receipt.model_dump()}

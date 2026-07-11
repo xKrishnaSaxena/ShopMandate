@@ -67,9 +67,16 @@ import com.shopmandate.ui.theme.SuccessGreen
  */
 @Composable
 fun SuccessScreen(
+    item: String = "boAt Airdopes",
+    priceInr: Int = 1800,
+    store: String = "Store B",
+    orderId: String = "#SM-4821",
+    delivery: String = "kal shaam",
     onDone: () -> Unit = {},
     onTrack: () -> Unit = {},
 ) {
+    val priceText = "₹${"%,d".format(priceInr)}"
+    val shortId = orderId.removePrefix("#").takeLast(4)
     var shown by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
@@ -116,15 +123,15 @@ fun SuccessScreen(
         ) {
             Column(Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("boAt Airdopes", color = Ink, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    Text(item, color = Ink, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     Spacer(Modifier.weight(1f))
-                    Text("₹1,800", color = Brand, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    Text(priceText, color = Brand, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Storefront, contentDescription = null, tint = InkMuted, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Store B", color = InkMuted, fontSize = 14.sp)
+                    Text(store, color = InkMuted, fontSize = 14.sp)
                 }
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = InkMuted.copy(alpha = 0.12f))
@@ -132,14 +139,14 @@ fun SuccessScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Order ID", color = InkMuted, fontSize = 15.sp)
                     Spacer(Modifier.weight(1f))
-                    Text("#SM-4821", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(orderId, color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Delivery", color = InkMuted, fontSize = 15.sp)
                     Spacer(Modifier.weight(1f))
                     Surface(shape = RoundedCornerShape(50), color = Cta.copy(alpha = 0.12f)) {
-                        Text("kal shaam", color = Cta, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+                        Text(delivery, color = Cta, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
                     }
                 }
             }
@@ -167,9 +174,9 @@ fun SuccessScreen(
                 }
                 if (expanded) {
                     Spacer(Modifier.height(12.dp))
-                    ChainRow("1. Intent Mandate", "#im-4821 · user-signed")
-                    ChainRow("2. Cart Mandate", "#cm-4821 · Store B-signed")
-                    ChainRow("3. Payment Mandate", "#pm-4821 · device-signed")
+                    ChainRow("1. Intent Mandate", "#im-$shortId · user-signed")
+                    ChainRow("2. Cart Mandate", "#cm-$shortId · $store-signed")
+                    ChainRow("3. Payment Mandate", "#pm-$shortId · device-signed")
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "Tamper-evident chain (AP2 — Phase 2).",

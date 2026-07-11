@@ -6,14 +6,15 @@ import android.os.Build
 import android.util.Base64
 import java.io.File
 
-/** Records mic audio to a temp file (AAC/MP4) and exposes it as base64 + live amplitude. */
+/** Records mic audio to a temp file (raw AAC/ADTS — a Gemini-supported audio format)
+ *  and exposes it as base64 + live amplitude. */
 class AudioCapture(private val context: Context) {
     private var recorder: MediaRecorder? = null
     private var outputFile: File? = null
 
     fun start() {
         stopQuietly() // safety: no leftover recorder
-        val file = File.createTempFile("rec_", ".m4a", context.cacheDir)
+        val file = File.createTempFile("rec_", ".aac", context.cacheDir)
         outputFile = file
         val rec = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
@@ -23,7 +24,9 @@ class AudioCapture(private val context: Context) {
         }
         rec.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            // AAC_ADTS → raw AAC stream; mime "audio/aac" is a Gemini-supported audio type
+            // (MPEG_4/.m4a container is NOT reliably accepted by the model).
+            setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             setAudioEncodingBitRate(96_000)
             setAudioSamplingRate(44_100)

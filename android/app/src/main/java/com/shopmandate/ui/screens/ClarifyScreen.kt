@@ -52,11 +52,15 @@ import com.shopmandate.ui.theme.InkMuted
  */
 @Composable
 fun ClarifyScreen(
+    product: String = "Wireless earbuds",
+    budgetInr: Int? = 2000,
+    qty: Int = 1,
+    question: String? = null,
     onNext: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
     var type by remember { mutableStateOf("Wireless") }
-    var budget by remember { mutableStateOf("₹2000") }
+    var budget by remember { mutableStateOf(budgetInr?.let { "₹$it" } ?: "Koi budget nahi ∞") }
 
     Column(
         modifier = Modifier
@@ -103,11 +107,11 @@ fun ClarifyScreen(
                     fontSize = 15.sp,
                 )
                 Spacer(Modifier.height(12.dp))
-                EditChip("Wireless earbuds")
+                EditChip(product.ifBlank { "Product" })
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    EditChip("Budget ₹2000")
-                    EditChip("Qty 1")
+                    EditChip(budgetInr?.let { "Budget ₹$it" } ?: "No budget")
+                    EditChip("Qty $qty")
                 }
             }
         }
@@ -131,7 +135,7 @@ fun ClarifyScreen(
             Spacer(Modifier.width(10.dp))
             Surface(shape = RoundedCornerShape(18.dp), color = Brand.copy(alpha = 0.06f)) {
                 Text(
-                    "Ek baat — wireless hi chahiye ya wired bhi chalega?",
+                    question ?: "Ek baat — wireless hi chahiye ya wired bhi chalega?",
                     color = Ink,
                     fontSize = 17.sp,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),

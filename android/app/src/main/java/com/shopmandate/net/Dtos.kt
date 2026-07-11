@@ -93,7 +93,28 @@ data class SearchResponse(
     val quotes: List<Quote> = emptyList(),
     val winner: Winner? = null,
     val cart: Cart? = null,
+    val steps: List<String> = emptyList(),   // live A2A haggle transcript
 )
+
+// ---- wow-factors ----
+@Serializable
+data class SayRequest(val text: String)
+
+@Serializable
+data class SayResponse(val audioB64: String, val mime: String = "audio/wav")
+
+@Serializable
+data class VisualizeRequest(
+    val product: String? = null,
+    val imageB64: String? = null,
+    val style: String? = null,
+)
+
+@Serializable
+data class VisualizeResponse(val imageB64: String, val mime: String = "image/png")
+
+@Serializable
+data class ResearchResponse(val note: String, val quotesConsidered: Int = 0)
 
 // ---- POST /connect/{store}/start & /verify ----
 @Serializable

@@ -28,4 +28,14 @@ interface ApiService {
 
     @GET("api/orders")
     suspend fun orders(): OrdersResponse
+
+    // ---- wow-factors ----
+    @POST("api/say")
+    suspend fun say(@Body body: SayRequest): SayResponse
+
+    @POST("api/visualize")
+    suspend fun visualize(@Body body: VisualizeRequest): VisualizeResponse
+
+    @GET("api/session/{id}/research")
+    suspend fun research(@Path("id") sessionId: String): ResearchResponse
 }

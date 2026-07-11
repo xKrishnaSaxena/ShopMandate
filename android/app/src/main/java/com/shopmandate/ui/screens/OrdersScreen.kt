@@ -43,23 +43,14 @@ import com.shopmandate.ui.theme.Cta
 import com.shopmandate.ui.theme.Ink
 import com.shopmandate.ui.theme.InkMuted
 import com.shopmandate.ui.theme.SuccessGreen
+import com.shopmandate.net.OrderDto
 
-data class PastOrder(
-    val product: String,
-    val store: String,
-    val priceInr: Int,
-    val orderId: String,
-    val date: String,
-    val status: String,
-    val delivered: Boolean,
-)
-
-// Mock history for now. TODO: replace with real orders from the backend / completed sessions.
+// Fallback preview history (real orders come from GET /api/orders).
 private val MOCK_ORDERS = listOf(
-    PastOrder("boAt Airdopes 141 – Wireless Earbuds", "Store B", 1800, "#SM-4821", "Aaj", "On the way", false),
-    PastOrder("Aashirvaad Atta 5kg", "Store B", 245, "#SM-4790", "2 din pehle", "Delivered", true),
-    PastOrder("Fast Charger 25W", "Store A", 499, "#SM-4712", "Pichle hafte", "Delivered", true),
-    PastOrder("Amul Doodh 1L × 6", "Store B", 330, "#SM-4655", "Pichle hafte", "Delivered", true),
+    OrderDto("boAt Airdopes 141 – Wireless Earbuds", "Store B", 1800, "#SM-4821", "Aaj", "On the way", false),
+    OrderDto("Aashirvaad Atta 5kg", "Store B", 245, "#SM-4790", "2 din pehle", "Delivered", true),
+    OrderDto("Fast Charger 25W", "Store A", 499, "#SM-4712", "Pichle hafte", "Delivered", true),
+    OrderDto("Amul Doodh 1L × 6", "Store B", 330, "#SM-4655", "Pichle hafte", "Delivered", true),
 )
 
 /**
@@ -68,7 +59,7 @@ private val MOCK_ORDERS = listOf(
  */
 @Composable
 fun OrdersScreen(
-    orders: List<PastOrder> = MOCK_ORDERS,
+    orders: List<OrderDto> = MOCK_ORDERS,
     onBack: () -> Unit = {},
 ) {
     Column(
@@ -121,7 +112,7 @@ fun OrdersScreen(
 }
 
 @Composable
-private fun OrderCard(order: PastOrder) {
+private fun OrderCard(order: OrderDto) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),

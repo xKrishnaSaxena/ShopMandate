@@ -66,17 +66,20 @@ private val UPI_APPS = listOf(
  */
 @Composable
 fun PayScreen(
-    onPaid: () -> Unit = {},
+    amountInr: Int = 1800,
+    product: String = "boAt Airdopes 141 – Wireless Earbuds",
+    onPay: (String) -> Unit = {},
     onBack: () -> Unit = {},
 ) {
     var selected by remember { mutableStateOf("Paytm") }
     var authorizing by remember { mutableStateOf(false) }
+    val amountText = "₹${"%,d".format(amountInr)}"
 
-    // Mock authorization delay, then complete.
+    // UPI-PIN authorization animation, then fire the real backend payment.
     LaunchedEffect(authorizing) {
         if (authorizing) {
             delay(1900)
-            onPaid()
+            onPay(selected.lowercase())
         }
     }
 
@@ -107,9 +110,9 @@ fun PayScreen(
                         .background(InkMuted.copy(alpha = 0.3f)),
                 )
                 Spacer(Modifier.height(20.dp))
-                Text("Pay ₹1,800", color = Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                Text("Pay $amountText", color = Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
                 Spacer(Modifier.height(4.dp))
-                Text("boAt Airdopes 141 – Wireless Earbuds", color = InkMuted, fontSize = 14.sp)
+                Text(product, color = InkMuted, fontSize = 14.sp)
 
                 Spacer(Modifier.height(22.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -169,7 +172,7 @@ fun PayScreen(
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(containerColor = Cta),
                 ) {
-                    Text("Pay ₹1,800 securely  →", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text("Pay $amountText securely  →", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 }
                 Spacer(Modifier.height(8.dp))
             }

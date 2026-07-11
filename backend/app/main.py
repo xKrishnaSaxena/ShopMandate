@@ -74,6 +74,22 @@ def merchants() -> dict:
     return orchestrator.merchants_status()
 
 
+# ---- store-scoped connect + orders (Android app contract) ----
+@app.post("/api/connect/{store}/start")
+def store_connect_start(store: str, req: ConnectStartReq) -> dict:
+    return orchestrator.store_connect_start(store, req.phone)
+
+
+@app.post("/api/connect/{store}/verify")
+def store_connect_verify(store: str, req: ConnectVerifyReq) -> dict:
+    return orchestrator.store_connect_verify(store, req.otp)
+
+
+@app.get("/api/orders")
+def orders() -> dict:
+    return orchestrator.orders()
+
+
 # ---- Pine Labs P3P: agentic payment (edge #1) ----
 @app.get("/api/p3p/status")
 def p3p_status() -> dict:

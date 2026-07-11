@@ -1,6 +1,7 @@
 package com.shopmandate.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.LocalShipping
@@ -29,9 +31,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,10 +55,20 @@ import com.shopmandate.ui.theme.InkMuted
  */
 @Composable
 fun ApproveScreen(
+    productName: String = "boAt Airdopes 141 –\nWireless Earbuds",
+    subtitle: String = "Color: Bold Black • 1 Year Warranty",
+    priceInr: Int = 1800,
+    qty: Int = 1,
+    reason: String = "Store B chuna — ₹150 sasta + jaldi delivery",
+    delivery: String = "kal shaam tak",
+    visualB64: String? = null,
     onApprove: () -> Unit = {},
     onReject: () -> Unit = {},
     onBack: () -> Unit = {},
+    onVisualize: () -> Unit = {},
 ) {
+    val priceText = "₹${"%,d".format(priceInr)}"
+    val visual = remember(visualB64) { visualB64?.let { decodeB64(it) } }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -103,18 +118,43 @@ fun ApproveScreen(
                         .background(Brand.copy(alpha = 0.05f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Headphones, contentDescription = null, tint = InkMuted.copy(alpha = 0.5f), modifier = Modifier.size(64.dp))
+                    if (visual != null) {
+                        Image(
+                            bitmap = visual,
+                            contentDescription = productName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Icon(Icons.Filled.Headphones, contentDescription = null, tint = InkMuted.copy(alpha = 0.5f), modifier = Modifier.size(64.dp))
+                    }
+                    // ✨ Nano-Banana "dekho kaisa lagega" (bottom-right chip)
+                    Surface(
+                        onClick = onVisualize,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
+                        shape = RoundedCornerShape(50),
+                        color = Color.White.copy(alpha = 0.92f),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Cta, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Dekho kaisa lagega", color = Cta, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                        }
+                    }
                 }
                 Column(Modifier.padding(20.dp)) {
-                    Text("boAt Airdopes 141 –\nWireless Earbuds", color = Ink, fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp)
+                    Text(productName, color = Ink, fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text("Color: Bold Black • 1 Year Warranty", color = InkMuted, fontSize = 14.sp)
+                    Text(subtitle, color = InkMuted, fontSize = 14.sp)
                     Spacer(Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("₹1,800", color = Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                        Text(priceText, color = Ink, fontWeight = FontWeight.Bold, fontSize = 30.sp)
                         Spacer(Modifier.weight(1f))
                         Surface(shape = RoundedCornerShape(50), color = Brand.copy(alpha = 0.08f)) {
-                            Text("Qty: 1", color = Brand, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                            Text("Qty: $qty", color = Brand, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                         }
                     }
                 }
@@ -133,12 +173,12 @@ fun ApproveScreen(
                 Icon(Icons.Filled.Verified, contentDescription = null, tint = Cta, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Store B chuna — ₹150 sasta + jaldi delivery", color = Cta, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 20.sp)
+                    Text(reason, color = Cta, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 20.sp)
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.LocalShipping, contentDescription = null, tint = Cta, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Delivery: kal shaam tak", color = Cta, fontSize = 13.sp)
+                        Text("Delivery: $delivery", color = Cta, fontSize = 13.sp)
                     }
                 }
             }
@@ -157,7 +197,7 @@ fun ApproveScreen(
         ) {
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Approve & Pay ₹1,800", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("Approve & Pay $priceText", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onReject) {
@@ -165,6 +205,14 @@ fun ApproveScreen(
         }
         Spacer(Modifier.height(8.dp))
     }
+}
+
+/** Decode a base64 PNG/JPEG into a Compose ImageBitmap (best-effort). */
+internal fun decodeB64(b64: String): androidx.compose.ui.graphics.ImageBitmap? = try {
+    val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+} catch (e: Exception) {
+    null
 }
 
 @Preview(showBackground = true, showSystemUi = true)
