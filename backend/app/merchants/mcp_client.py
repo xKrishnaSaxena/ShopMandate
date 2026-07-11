@@ -15,6 +15,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import httpx
+
 from mcp import ClientSession
 from mcp.client.auth import OAuthClientProvider, TokenStorage
 from mcp.client.streamable_http import streamablehttp_client
@@ -23,6 +25,29 @@ from mcp.types import CallToolResult
 
 REDIRECT_PORT = int(os.environ.get("MCP_REDIRECT_PORT", "8970"))
 REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}/callback"
+
+
+def _has_429(exc: BaseException) -> bool:
+    """True if `exc` (or anything nested in its ExceptionGroup / cause chain) is an HTTP 429."""
+    seen: set[int] = set()
+    stack: list[BaseException] = [exc]
+    while stack:
+        e = stack.pop()
+        if id(e) in seen:
+            continue
+        seen.add(id(e))
+        if isinstance(e, httpx.HTTPStatusError):
+            resp = getattr(e, "response", None)
+            if resp is not None and resp.status_code == 429:
+                return True
+        subs = getattr(e, "exceptions", None)  # ExceptionGroup / TaskGroup
+        if subs:
+            stack.extend(subs)
+        for attr in ("__cause__", "__context__"):
+            nested = getattr(e, attr, None)
+            if nested is not None:
+                stack.append(nested)
+    return False
 TOKENS_DIR = Path(__file__).resolve().parent.parent.parent / ".mcp-tokens"
 
 
@@ -152,33 +177,54 @@ class MCPMerchant:
     def connected(self) -> bool:
         return self.storage.has_token()
 
+    async def _retry(self, fn, tries: int = 3):
+        """Run an MCP action, retrying on HTTP 429 with exponential backoff. The MCP client
+        raises inside an anyio TaskGroup, so a 429 surfaces as an ExceptionGroup — unwrap it
+        and, if it never clears, raise ONE clean message instead of the opaque TaskGroup text."""
+        delay = 1.0
+        for i in range(tries):
+            try:
+                return await fn()
+            except BaseException as e:  # noqa: BLE001 — includes the TaskGroup ExceptionGroup
+                if _has_429(e):
+                    if i < tries - 1:
+                        await asyncio.sleep(delay)
+                        delay *= 2
+                        continue
+                    raise RuntimeError("store abhi busy hai (rate limit) — thodi der baad try karo") from e
+                raise
+
     async def call(self, tool: str, args: dict | None = None) -> object:
-        provider = OAuthClientProvider(
-            server_url=self.server_url,
-            client_metadata=_client_metadata(self.scope),
-            storage=self.storage,
-            redirect_handler=_redirect_handler,
-            callback_handler=_callback_handler,
-        )
-        async with streamablehttp_client(self.server_url, auth=provider) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                res = await session.call_tool(tool, args or {})
-                return result_json(res)
+        async def _do():
+            provider = OAuthClientProvider(
+                server_url=self.server_url,
+                client_metadata=_client_metadata(self.scope),
+                storage=self.storage,
+                redirect_handler=_redirect_handler,
+                callback_handler=_callback_handler,
+            )
+            async with streamablehttp_client(self.server_url, auth=provider) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    res = await session.call_tool(tool, args or {})
+                    return result_json(res)
+        return await self._retry(_do)
 
     async def list_tools(self) -> list[str]:
-        provider = OAuthClientProvider(
-            server_url=self.server_url,
-            client_metadata=_client_metadata(self.scope),
-            storage=self.storage,
-            redirect_handler=_redirect_handler,
-            callback_handler=_callback_handler,
-        )
-        async with streamablehttp_client(self.server_url, auth=provider) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tools = await session.list_tools()
-                return [t.name for t in tools.tools]
+        async def _do():
+            provider = OAuthClientProvider(
+                server_url=self.server_url,
+                client_metadata=_client_metadata(self.scope),
+                storage=self.storage,
+                redirect_handler=_redirect_handler,
+                callback_handler=_callback_handler,
+            )
+            async with streamablehttp_client(self.server_url, auth=provider) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+                    return [t.name for t in tools.tools]
+        return await self._retry(_do)
 
     async def list_tool_defs(self) -> list[dict]:
         """Full tool definitions (name + description + input schema) for discovery —
