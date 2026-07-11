@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load backend/.env (GOOGLE_API_KEY=...) before importing modules that read env.
@@ -20,7 +20,7 @@ if _env.exists():
 from . import orchestrator  # noqa: E402
 import base64  # noqa: E402
 
-from . import gemini, p3p  # noqa: E402
+from . import gemini, live, p3p  # noqa: E402
 from .models import (  # noqa: E402
     ClarifyReq,
     ConnectStartReq,
@@ -94,6 +94,73 @@ def orders() -> dict:
 @app.get("/api/p3p/status")
 def p3p_status() -> dict:
     return {"mode": p3p.mode()}
+
+
+# ---- Gemini Live: real-time DUPLEX voice (Phase 2) ----
+@app.websocket("/api/live")
+async def live_ws(ws: WebSocket) -> None:
+    """Bridge the app's mic PCM (16k) ↔ a Gemini Live native-audio session (24k out + transcripts).
+
+    Uplink: binary frames = raw 16kHz PCM mic chunks; text frames = {"type":"text"|"end", ...}.
+    Downlink: binary frames = 24kHz PCM to play; text frames = {"type":"you"|"agent"|"interrupted"
+    |"turn_complete", "text"?}.
+    """
+    import asyncio
+    import json
+
+    from google.genai import types as gt
+
+    await ws.accept()
+    try:
+        async with live.connect() as session:
+            async def uplink() -> None:
+                while True:
+                    msg = await ws.receive()
+                    if msg.get("type") == "websocket.disconnect":
+                        return
+                    if (chunk := msg.get("bytes")) is not None:
+                        await session.send_realtime_input(
+                            audio=gt.Blob(data=chunk, mime_type=live.INPUT_MIME)
+                        )
+                    elif (text := msg.get("text")) is not None:
+                        data = json.loads(text)
+                        if data.get("type") == "text" and data.get("text"):
+                            await session.send_client_content(
+                                turns=gt.Content(role="user", parts=[gt.Part(text=data["text"])]),
+                                turn_complete=True,
+                            )
+                        elif data.get("type") == "end":
+                            await session.send_realtime_input(audio_stream_end=True)
+
+            async def downlink() -> None:
+                async for message in session.receive():
+                    if message.data:  # 24kHz PCM audio chunk
+                        await ws.send_bytes(message.data)
+                    sc = message.server_content
+                    if not sc:
+                        continue
+                    if sc.input_transcription and sc.input_transcription.text:
+                        await ws.send_text(json.dumps({"type": "you", "text": sc.input_transcription.text}))
+                    if sc.output_transcription and sc.output_transcription.text:
+                        await ws.send_text(json.dumps({"type": "agent", "text": sc.output_transcription.text}))
+                    if sc.interrupted:  # user barged in — tell the app to stop playback
+                        await ws.send_text(json.dumps({"type": "interrupted"}))
+                    if sc.turn_complete:
+                        await ws.send_text(json.dumps({"type": "turn_complete"}))
+
+            up = asyncio.create_task(uplink())
+            down = asyncio.create_task(downlink())
+            _, pending = await asyncio.wait({up, down}, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:  # a Live hiccup shouldn't crash the worker
+        print(f"[live] session error: {e}")
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 # ---- Wow-factors ----
