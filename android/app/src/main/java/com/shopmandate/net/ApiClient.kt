@@ -1,0 +1,44 @@
+package com.shopmandate.net
+
+import android.content.Context
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNamingStrategy
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
+
+/**
+ * Builds the [ApiService]. Base URL comes from [DevConfig] (overridable at runtime via the
+ * hidden dev dialog — tap the "ShopMandate" logo 10×). Defaults to the emulator host.
+ */
+object ApiClient {
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private val json = Json {
+        ignoreUnknownKeys = true
+        namingStrategy = JsonNamingStrategy.SnakeCase
+        encodeDefaults = true
+        explicitNulls = false
+    }
+
+    /** Uses the currently-configured base URL (from DevConfig). */
+    fun create(context: Context): ApiService = create(DevConfig.getBaseUrl(context))
+
+    fun create(baseUrl: String): ApiService {
+        val logging = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        val client = OkHttpClient.Builder()
+            .addInterceptor(logging)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(ApiService::class.java)
+    }
+}

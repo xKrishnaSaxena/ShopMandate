@@ -1,0 +1,4 @@
+<resources>
+    <!-- Base platform theme; actual look is driven by Compose MaterialTheme (ShopMandateTheme). -->
+    <style name="Theme.ShopMandate" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

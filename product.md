@@ -57,28 +57,37 @@ let the compare screen show over-ear headphones or the pay screen say "Noise Can
 
 ---
 
-## 4. End-to-end user flow (10 screens → API calls)
+## 4. End-to-end user flow (11 screens → API calls)
 
-Flow: **Home → Voice/Camera → Clarify → Compare → Approve → [Connect+OTP, first time only] → UPI Pay → Receipt**
+**Connect-first flow:** stores must be connected BEFORE any shopping — Home is locked until then.
+
+```
+Home 🔒 → Connect → OTP (per store) → Home ✓
+   → Voice/Camera → Clarify → Compare → Approve → UPI Pay → Success
+```
 
 | # | Screen (design folder) | What happens | Backend call |
 |---|------------------------|--------------|--------------|
-| 1 | `home_voice_first` | User taps mic / camera / types | — |
+| 1 | `home_voice_first` | Locked until ≥1 store connected; mic/camera/type | — |
 | 2 | `voice_listening` | Capture audio, show live-ish transcript | `POST /session/start` (voice) |
 | 3 | `camera_search` | Capture photo of product | `POST /session/start` (photo) |
 | 4 | `clarification` | Show parsed intent + ask 1 question, quick-reply chips | `POST /session/{id}/clarify` |
 | 5 | `comparing_stores` | Store A vs B, price + "₹150 sasta", winner | `POST /session/{id}/search` |
 | 6 | `approve_pay` | Show exact cart + "why B" + Approve | (uses cart from search) |
-| 7 | `connect_store_phone` | One-time: enter mobile → OTP | `POST /session/{id}/connect/start` |
-| 8 | `otp_verification` | Enter OTP → connected | `POST /session/{id}/connect/verify` |
+| 7 | `connect_store_phone` | Per-store list; each store its own OTP | `POST /connect/{store}/start` |
+| 8 | `otp_verification` | Enter that store's OTP → connected | `POST /connect/{store}/verify` |
 | 9 | `upi_payment` | Choose UPI app → pay → "authorizing" | `POST /session/{id}/pay` |
 | 10 | `order_success` | Receipt + order id + verifiable-receipt teaser | (uses pay response) |
+| 11 | `orders` (history) | Past orders list (personalization source) | `GET /orders` |
 
 **Notes**
-- Screens 7–8 (connect + OTP) are a **one-time account-linking** step. After the first order, skip straight
-  from Approve → Pay. Gate with a `store_connected` flag in session/localStorage.
+- **Connect-first, per store:** each store (Zepto, Swiggy) connects SEPARATELY with its OWN OTP (real MCP =
+  separate OAuth). `connectedStores` is a **set**; shopping unlocks once it's non-empty and stays connected
+  for later orders.
 - Screen 9 has two visual states: the UPI-app chooser, then an **"Authorizing… / UPI PIN daalo"** overlay
-  (mock) before success. This overlay was missing in the Stitch export — add it in the build.
+  (mock) before success.
+- **Orders** screen is the entry point to the **personalization / memory layer** (§9.6): past orders feed
+  the LLM for reorder suggestions and preference priming.
 
 ---
 
@@ -95,16 +104,17 @@ Flow: **Home → Voice/Camera → Clarify → Compare → Approve → [Connect+O
                                 │  HTTP/JSON  (contract §8)
                                 ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  BACKEND  (Node.js + TypeScript + Express)                     │
+│  BACKEND  (Python + FastAPI + Uvicorn)                         │
 │  ORCHESTRATOR / SHOPPING AGENT                                 │
 │   • audio/image/text → Gemini multimodal → structured Intent  │
-│   • runs clarification logic                                  │
+│   • personalizes intent with the user's ORDER MEMORY (§9.6)   │
 │   • calls Store A + Store B tools, compares, light-haggles    │
 │   • builds Cart, handles connect/OTP (mock), payment (mock)   │
 │                                                               │
-│   ├─ Gemini client (@google/genai) — multimodal intent       │
+│   ├─ Gemini client (google-genai) — multimodal intent        │
 │   ├─ Store Agent A (mock ₹ catalog) — search/quote/counter   │
 │   ├─ Store Agent B (mock ₹ catalog) — search/quote/counter   │
+│   ├─ Memory layer (past orders → LLM, reorder suggestions)   │
 │   ├─ Mock UPI payment service       — authorize → receipt    │
 │   └─ Mock store-connect (OTP)       — phone → otp → connected │
 └───────────────────────────────────────────────────────────────┘
@@ -126,17 +136,16 @@ Flow: **Home → Voice/Camera → Clarify → Compare → Approve → [Connect+O
 | Media capture | **CameraX** (photo), **MediaRecorder/AudioRecord** (mic) | Native capture → base64 for §8 |
 | Permissions | `CAMERA`, `RECORD_AUDIO` (runtime) | Required for capture |
 | Min SDK | 26+ (target latest stable) | Modern APIs, wide device coverage |
-| Backend | **Node.js 20+ + TypeScript + Express** | Team preference; language-agnostic to the app via REST |
-| Validation | **Zod** | Schema validation, mirrors the §9.5 models |
-| AI | **Gemini Flash (latest multimodal)** via `@google/genai` | Audio transcription + parse + image understand. **Verify current model id** (e.g. `gemini-2.5-flash`) in Google AI Studio |
-| Dev reload | `tsx` (or `ts-node-dev`) | Hot reload for TS |
-| Package mgmt | `npm`/`pnpm` (backend) · Gradle (Android) | Standard |
+| Backend | **Python 3.11+ + FastAPI + Uvicorn** | Team preference; matches the Gemini + AP2 (Phase 2) ecosystem; language-agnostic to the app via REST |
+| Validation | **Pydantic** | Typed schema models, mirror the §9.5 models |
+| AI | **Gemini Flash (latest multimodal)** via `google-genai` | Audio transcription + parse + image understand. **Verify current model id** (e.g. `gemini-2.5-flash`) in Google AI Studio |
+| Dev reload | `uvicorn --reload` | Hot reload for the API |
+| Package mgmt | `uv` (backend) · Gradle (Android) | Fast installs |
 
-**Framework-agnostic note:** Phase 1 uses a lean **Express/TS** orchestrator with Gemini function-calling for
-tool orchestration. AP2's reference implementation is **Python** — so for Phase 2 you can either adopt Google
-**ADK / iAPI Managed Agents + AP2 + A2A** (running the AP2 mandate-signing bits as a **separate Python
-service**) or stay in TS and call AP2 over its APIs. The app ↔ backend REST contract (§8) doesn't change
-either way.
+**Framework-agnostic note:** Phase 1 uses a lean **FastAPI** orchestrator with Gemini function-calling for
+tool orchestration. AP2's reference implementation is **Python too**, so Phase 2 slots in naturally — adopt
+Google **ADK / iAPI Managed Agents + AP2 + A2A** in the same service. The app ↔ backend REST contract (§8)
+doesn't change either way.
 
 ---
 
@@ -144,39 +153,38 @@ either way.
 
 ```
 shopmandate/
-├── BUILD.md                     ← this file
+├── product.md                   ← this file (master spec)
 ├── design/                      ← Stitch exports (visual source of truth)
 │   ├── stitch-prompt.md
 │   ├── home_voice_first/ (code.html, screen.png)
-│   ├── voice_listening/ ...      (10 screens total)
+│   ├── voice_listening/ ...      (11 screens total, incl. orders)
 │   └── shopmandate/DESIGN.md
-├── android/                     ← Kotlin + Jetpack Compose app
+├── android/                     ← Kotlin + Jetpack Compose app (BUILT — 11 screens)
 │   ├── app/src/main/
 │   │   ├── java/com/shopmandate/
 │   │   │   ├── MainActivity.kt          ← single activity, sets Compose content
-│   │   │   ├── ShopViewModel.kt         ← flow state machine + session state (StateFlow)
-│   │   │   ├── net/ApiService.kt        ← Retrofit interface for §8
-│   │   │   ├── net/Dtos.kt              ← @Serializable request/response models (§8)
+│   │   │   ├── ShopViewModel.kt         ← flow state machine + connectedStores set
+│   │   │   ├── net/ApiService.kt        ← Retrofit interface for §8   (TODO)
+│   │   │   ├── net/Dtos.kt              ← @Serializable DTOs (§8)      (TODO)
 │   │   │   ├── ui/theme/                ← Color/Type/Theme from design tokens (§10.3)
 │   │   │   ├── ui/screens/              ← one composable per screen (§10.2)
-│   │   │   ├── ui/components/           ← MicButton, Waveform, StoreCard, OtpInput, UpiSheet…
-│   │   │   └── capture/                 ← CameraX + audio capture → base64
-│   │   ├── res/                         ← icons, drawables (earbuds image, store logos)
+│   │   │   └── capture/                 ← CameraX + audio capture → base64 (TODO)
+│   │   ├── res/                         ← icons, drawables
 │   │   └── AndroidManifest.xml          ← CAMERA + RECORD_AUDIO + INTERNET perms
 │   └── build.gradle.kts
-└── backend/                     ← Node + TypeScript
-    ├── package.json
-    ├── tsconfig.json
+└── backend/                     ← Python + FastAPI  (TO BUILD)
+    ├── pyproject.toml
     ├── .env                     ← GOOGLE_API_KEY=...
-    └── src/
-        ├── index.ts             ← Express app + routes (§8)
-        ├── models.ts            ← Zod schemas / types (§9.5)
-        ├── orchestrator.ts      ← Shopping Agent logic
-        ├── gemini.ts            ← multimodal intent extraction (§9.2)
-        ├── stores.ts            ← Store A/B mock agents + catalogs (§9.3)
-        ├── negotiation.ts       ← compare + light haggle (§9.3)
-        ├── payment.ts           ← mock UPI service (§9.4)
-        └── connect.ts           ← mock store-connect/OTP (§9.4)
+    └── app/
+        ├── main.py              ← FastAPI app + routes (§8)
+        ├── models.py            ← Pydantic models (§9.5)
+        ├── orchestrator.py      ← Shopping Agent logic
+        ├── gemini.py            ← multimodal intent extraction (§9.2)
+        ├── stores.py            ← Store A/B mock agents + catalogs (§9.3)
+        ├── negotiation.py       ← compare + light haggle (§9.3)
+        ├── payment.py           ← mock UPI service (§9.4)
+        ├── connect.py           ← mock per-store OTP connect (§9.4)
+        └── memory.py            ← past-orders personalization layer (§9.6)
 ```
 
 ---
@@ -203,7 +211,11 @@ Start a session from voice / photo / text.
   "transcript": "mujhe ₹2000 ke andar acche wireless earbuds chahiye", // if voice
   "parsed_intent": { "product": "wireless earbuds", "category": "audio",
                      "budget_inr": 2000, "qty": 1, "constraints": [], "language": "hi-IN" },
-  "clarifying_question": "wireless hi chahiye ya wired bhi chalega?" // if need_clarification
+  "clarifying_question": "wireless hi chahiye ya wired bhi chalega?", // if need_clarification
+  "reorder_suggestion": {   // from the memory layer (§9.6); null if no match
+    "matched_order_id": "SM-4790",
+    "text": "Pichli baar Aashirvaad Atta 5kg ₹245 mein liya tha — wahi reorder karein?"
+  }
 }
 ```
 
@@ -237,20 +249,21 @@ Run both stores, compare, pick winner, build cart.
 }
 ```
 
-### 8.4 `POST /api/session/{id}/connect/start`  (one-time)
+### 8.4 `POST /api/connect/{store}/start`  (per-store, one-time)
+`{store}` = `zepto` | `swiggy`. Each store connects separately with its own OTP.
 ```jsonc
 // Request
 { "phone": "9876543210" }
 // Response
-{ "status": "otp_sent", "masked_phone": "+91 98XXX-XX21" }
+{ "status": "otp_sent", "store": "Zepto", "masked_phone": "+91 98XXX-XX21" }
 ```
 
-### 8.5 `POST /api/session/{id}/connect/verify`  (one-time)
+### 8.5 `POST /api/connect/{store}/verify`  (per-store, one-time)
 ```jsonc
 // Request
 { "otp": "123456" }          // mock: accept "123456" (or any 6 digits)
 // Response
-{ "status": "connected", "store": "Zepto" }
+{ "status": "connected", "store": "Zepto", "connected_stores": ["Zepto"] }
 ```
 
 ### 8.6 `POST /api/session/{id}/pay`
@@ -271,22 +284,38 @@ Run both stores, compare, pick winner, build cart.
 ```
 Frontend shows the "Authorizing… / UPI PIN daalo" overlay while awaiting this response.
 
+### 8.7 `GET /api/orders`  (history — powers the Orders screen + memory layer)
+```jsonc
+// Response
+{
+  "orders": [
+    { "product": "boAt Airdopes 141 – Wireless Earbuds", "store": "Store B", "price_inr": 1800,
+      "order_id": "SM-4821", "date": "2026-07-11", "status": "On the way", "delivered": false },
+    { "product": "Aashirvaad Atta 5kg", "store": "Store B", "price_inr": 245,
+      "order_id": "SM-4790", "date": "2026-07-09", "status": "Delivered", "delivered": true }
+  ]
+}
+```
+On a completed `/pay`, the backend **appends** the new order to this history so it enriches future
+personalization (§9.6).
+
 ---
 
 ## 9. Backend design (build each module)
 
-### 9.1 Orchestrator / Shopping Agent (`orchestrator.ts`)
+### 9.1 Orchestrator / Shopping Agent (`orchestrator.py`)
 Owns the session lifecycle and sequences the tools:
-1. `start` → call Gemini (`gemini.py`) to get transcript + structured intent. If a required field
+1. `start` → load the user's **order memory** (`memory.py`), then call Gemini (`gemini.py`) with that context
+   to get transcript + structured intent (+ optional `reorder_suggestion`). If a required field
    (type/budget) is missing or ambiguous → `need_clarification` with a question.
 2. `clarify` → merge answers into intent → `intent_ready`.
 3. `search` → call `stores.get_quote(intent)` for A and B → `negotiation.decide()` → cart.
-4. `connect/*` → delegate to `connect.py` (mock).
-5. `pay` → `payment.charge()` → build receipt.
-Keep session state in an in-memory `Map` keyed by `session_id` (a real DB is overkill for the hackathon).
+4. `connect/*` → delegate to `connect.py` (mock, per-store).
+5. `pay` → `payment.charge()` → build receipt → `memory.save_order()` (enriches future personalization).
+Keep session state in an in-memory `dict` keyed by `session_id` (a real DB is overkill for the hackathon).
 
-### 9.2 Gemini multimodal (`gemini.ts`)
-Use `@google/genai`. Two functions:
+### 9.2 Gemini multimodal (`gemini.py`)
+Use `google-genai`. Two functions:
 - `extract_intent_from_audio(audio_b64, language_hint) -> Intent` — transcribe + parse in one call.
 - `identify_from_image(image_b64) -> Intent` — identify the product and infer intent.
 
@@ -310,7 +339,7 @@ or Kannada. Extract product, budget in INR, quantity, and constraints. If the pr
 ambiguous, set needs_clarification=true and ask ONE short Hinglish question. Never invent a product the user
 didn't mention."*
 
-### 9.3 Store agents + negotiation (`stores.ts`, `negotiation.ts`)
+### 9.3 Store agents + negotiation (`stores.py`, `negotiation.py`)
 Two mock stores with ₹ catalogs. Each store exposes `get_quote(intent) -> Quote | None` (None = out of stock).
 
 **Mock catalog (seed data):**
@@ -343,31 +372,86 @@ Expose the negotiation steps in the response (or a log) so the compare screen ca
 **Error-recovery beat (optional, high-impact):** let one store return `in_stock:false` for a query and have
 the orchestrator silently fall back to the other — proves it's a real agent.
 
-### 9.4 Mock UPI payment (`payment.ts`) + store connect (`connect.ts`)
+### 9.4 Mock UPI payment (`payment.py`) + per-store connect (`connect.py`)
 - `payment.charge(cart, upi_app) -> Receipt`: sleep ~1.5s (simulated authorization), return receipt with a
   generated order id (`SM-####`). **No real money. Framed as UPI.**
-- `connect.start_otp(phone) -> masked_phone`; `connect.verify(otp) -> bool` (accept `123456` or any 6 digits).
-  This mirrors the real Zepto/Swiggy OAuth-OTP shape so Phase-2 swap-in is trivial.
+- `connect.start_otp(store, phone) -> masked_phone`; `connect.verify(store, otp) -> bool` (accept `123456`
+  or any 6 digits). Each store (Zepto, Swiggy) tracks its own connection; mirrors the real per-store OAuth-OTP
+  shape so Phase-2 swap-in is trivial.
 
-### 9.5 Data models (`models.ts`, Zod)
-`Intent`, `Quote`, `Cart`, `Order`, `Receipt`, `Session` — Zod schemas mirroring the JSON shapes in §8
-(infer TS types with `z.infer`). Keep them minimal.
+### 9.5 Data models (`models.py`, Pydantic)
+`Intent`, `Quote`, `Cart`, `Order`, `Receipt`, `Session`, `PastOrder`, `MemorySummary` — Pydantic models
+mirroring the JSON shapes in §8. Keep them minimal.
+
+### 9.6 Personalization / memory layer (`memory.py`) — past orders → LLM
+
+**Goal:** make the agent feel like it *knows* the user. Their past orders become context so it can
+(a) suggest **reorders**, (b) **recognise** repeat needs, and (c) **prime preferences** (usual budget,
+preferred store, favourite brands) into intent parsing and store choice. This is a real "agent memory",
+not a gimmick — it's what separates a personal assistant from a search box.
+
+**Storage (Phase 1):** a simple per-user JSON file (or SQLite) — `orders.json`. Real DB / auth = Phase 2.
+Each record = `PastOrder { product, category, store, price_inr, qty, order_id, date, status, delivered }`.
+This is the **same list** the Orders screen (`GET /orders`, §8.7) renders.
+
+**Four functions:**
+```
+get_history(user_id)              -> list[PastOrder]        # all past orders, newest first
+summarize_for_llm(history)        -> MemorySummary          # compact context for Gemini
+find_reorder_match(history, text) -> PastOrder | None       # does this request match a past buy?
+save_order(user_id, order)        -> None                   # append on a successful /pay
+```
+
+**`MemorySummary` (compact, cheap to send every request):**
+```jsonc
+{
+  "usual_budget_inr": 2000,                 // median of past budgets
+  "preferred_store": "Store B",             // most-ordered store
+  "favourite_brands": ["boAt", "Aashirvaad"],
+  "recent_products": ["Wireless Earbuds", "Atta 5kg", "Charger"],
+  "reorder_candidates": [                    // repeat-buy / consumables the user may want again
+    { "order_id": "SM-4790", "product": "Aashirvaad Atta 5kg", "store": "Store B", "price_inr": 245 }
+  ]
+}
+```
+
+**How it plugs into the flow (all in `orchestrator.py`):**
+1. On `POST /session/start`, load `get_history(user)` → `summarize_for_llm()` → inject the summary into
+   Gemini's **system context** alongside the audio/image. Intent parsing already knows the user's habits.
+2. Gemini (or a direct `find_reorder_match`) sets **`reorder_suggestion`** in the start response when the new
+   request matches a past order (see §8.1). The app surfaces *"Pichli baar boAt Airdopes ₹1,800 mein Store B
+   se liya tha — wahi reorder karein?"* as a one-tap chip (Home / Clarify).
+3. When the request is vague ("wahi mangwa do", "same as last time"), the memory match resolves it — **no
+   clarifying question needed.**
+4. During `search`, the summary biases the winner tie-break toward `preferred_store` (all else equal).
+5. On a successful `pay`, `save_order()` appends the new order → the next session is smarter. Closed loop.
+
+**Prompt guidance for Gemini (paraphrase):** *"Here is the user's recent order history: {summary}. If their
+new request clearly matches something they bought before, set reorder_suggestion with a short Hinglish nudge.
+Prefer their usual budget/store when the user doesn't specify. Never force a past product if they ask for
+something new."*
+
+**Privacy / honesty:** history is stored server-side and mock/local for the hackathon — say so in the demo.
+No real PII. (Phase 2: per-user auth + a real datastore.)
+
+**Demo beat this unlocks:** open app → "same as last time mangwa do" → agent instantly recalls the exact past
+order and jumps to Approve. That's a memorable "it actually remembers me" moment for judges.
 
 ---
 
 ## 10. Frontend design (Android / Compose)
 
-### 10.1 Flow state machine (`ShopViewModel.kt`)
+### 10.1 Flow state machine (`ShopViewModel.kt`) — BUILT
 ```kotlin
 sealed interface Screen {
   data object Home; data object Voice; data object Camera; data object Clarify
   data object Comparing; data object Approve; data object Connect; data object Otp
-  data object Pay; data object Success
+  data object Pay; data object Success; data object Orders
 }
 ```
-The ViewModel exposes `StateFlow<Screen>` + `session` + `storeConnected`; a single root `@Composable`
-`when`-switches on the current screen. Advance on user actions / API responses. Skip `Connect` + `Otp` when
-`storeConnected == true`.
+The ViewModel exposes `StateFlow<Screen>` + **`connectedStores: Set<String>`** (each store connects with its
+own OTP via `startConnect(store)` → `onOtpVerified()`). A single root `@Composable` `when`-switches on the
+current screen. Home is **locked until `connectedStores` is non-empty** (connect-first).
 
 ### 10.2 Screens → components (mirror `design/*/screen.png` pixel-for-pixel)
 | Screen | Key components |
@@ -422,13 +506,13 @@ future swap is a config change, not a rewrite.
 
 ## 12. Setup & run
 
-**Backend (Node + TypeScript)**
+**Backend (Python + FastAPI)**
 ```bash
 cd backend
-npm install express cors zod @google/genai
-npm install -D typescript tsx @types/express @types/cors @types/node
-echo "GOOGLE_API_KEY=your_key" > .env      # provisioned on hackathon day
-npx tsx watch src/index.ts                 # runs on http://localhost:8000
+uv venv && source .venv/bin/activate
+uv pip install fastapi "uvicorn[standard]" google-genai pydantic python-multipart
+echo "GOOGLE_API_KEY=your_key" > .env         # provisioned on hackathon day
+uvicorn app.main:app --reload --port 8000     # runs on http://localhost:8000
 ```
 
 **Android app (Kotlin + Compose)**
@@ -448,8 +532,9 @@ For local HTTP (non-HTTPS) during dev, allow cleartext to your dev host via a
 
 1. **Scaffold** both apps + the frozen API contract (§8) with **stubbed** responses (hard-coded canonical
    scenario). Frontend + backend can then progress in parallel. ✅ unblocks everyone.
-2. **App screens (Compose)** — build all 10 against stubs, pixel-matching `design/*/`. Apply the 3 fixes (§14).
-3. **Backend real logic (TS)** — Gemini intent (voice + photo), store catalogs + negotiation, mock pay/connect.
+2. **App screens (Compose)** — ✅ DONE: all 11 screens built + wired (connect-first, per-store OTP, orders).
+3. **Backend real logic (Python)** — Gemini intent (voice + photo) + **memory layer (§9.6)**, store catalogs +
+   negotiation, mock pay/connect, orders history.
 4. **Integrate** — swap stubs for real endpoints; test the full flow end-to-end on the canonical scenario.
 5. **Polish** — animations (waveform, authorizing overlay, compare ticker), Hinglish copy, error-recovery beat.
 6. **Freeze + record** the 60-sec demo video. No new code after freeze.
@@ -488,4 +573,75 @@ which is our Phase 2."
   (budget guard, out-of-stock fallback). Show the error-recovery beat.
 - **Real money?** No — UPI is framed; the flow is production-shaped; real PSP + AP2 signing is Phase 2.
 - **Just a scraper?** No — no scraping; stores are agents/tools; real stores expose official MCP servers.
-- **What's novel?** Multimodal intent + multi-store agent orchestration + (Phase 2) verifiable-intent payments.
+- **What's novel?** Multimodal intent + multi-store agent orchestration + memory-based personalization +
+  (Phase 2) verifiable-intent payments.
+
+---
+
+## 17. End-to-end build checklist (tick as you go — 3 devs)
+
+Rough split: **A = Android/UI**, **B = Backend/agent**, **C = Integration + demo/pitch**. Owner in `[ ]`.
+`[x]` = done, `[~]` = in progress, `[ ]` = todo. Keep this list honest — it's our source of truth.
+
+### Setup & foundations
+- [x] Repo + design exports in `design/` (all)
+- [x] Android project scaffolds + runs; toolchain validated (A)
+- [ ] Backend scaffold: FastAPI app runs, `GET /health` ok (B)
+- [ ] Google API key provisioned + `.env` set on each machine (all)
+- [x] Client↔server contract frozen (§8) (C)
+
+### Frontend — Android / Compose (11 screens)
+- [x] Home (connect-gated, mic hero) (A)
+- [x] Voice listening (waveform) (A)
+- [x] Camera (styled viewfinder placeholder) (A)
+- [x] Clarify (intent + selectable chips) (A)
+- [x] Comparing stores (A vs B, "₹150 sasta") (A)
+- [x] Approve cart (hero product) (A)
+- [x] Connect stores (per-store list) (A)
+- [x] OTP verify (per-store) (A)
+- [x] UPI Pay + "Authorizing/PIN" overlay (A)
+- [x] Success + verifiable-receipt teaser (A)
+- [x] Orders (past-orders history) (A)
+- [x] Nav state machine + connect-first gating (A)
+- [x] Per-store connect model (`connectedStores` set) (A)
+- [x] 3 design-consistency fixes (§14) (A)
+- [ ] Real mic capture (MediaRecorder → base64) (A)
+- [ ] Real camera capture (CameraX → base64) (A)
+- [ ] Retrofit API client (`net/`) against §8 (A)
+- [ ] Runtime CAMERA / RECORD_AUDIO permission prompts (A)
+- [ ] Reorder-suggestion chip on Home/Clarify (A)
+- [ ] Poppins/Jakarta font bundled (A, optional)
+
+### Backend — Python / FastAPI
+- [ ] `models.py` — Pydantic models (§9.5) (B)
+- [ ] `gemini.py` — audio→intent + image→intent (structured schema) (B)
+- [ ] `stores.py` — Store A/B mock ₹ catalogs (B)
+- [ ] `negotiation.py` — compare + light haggle + budget guard (B)
+- [ ] `payment.py` — mock UPI charge → receipt (B)
+- [ ] `connect.py` — per-store OTP mock (B)
+- [ ] `memory.py` — history + summarize + reorder-match + save (§9.6) (B)
+- [ ] `orchestrator.py` — session lifecycle wiring all tools + memory (B)
+- [ ] `main.py` — all §8 routes incl. `GET /orders` (B)
+- [ ] Verbose per-step logs (for demo + debugging) (B)
+
+### Integration
+- [ ] App ↔ backend connected (emulator `10.0.2.2` / device LAN IP) (C)
+- [ ] Full happy path end-to-end on the canonical scenario (C)
+- [ ] Voice → real intent works (Hinglish) (C)
+- [ ] Photo → product identified (C)
+- [ ] Reorder suggestion appears from memory (C)
+- [ ] Out-of-stock fallback beat works (C)
+- [ ] Budget-guard beat works (C)
+- [ ] Order saved to history after pay (C)
+
+### Should-ship (if core green by ~2 PM)
+- [ ] Hinglish / Kannada voice polish (A/B)
+- [ ] "Same as last time" memory demo beat (B/C)
+- [ ] Human-Not-Present pitch framing (C)
+
+### Demo & submission
+- [ ] 60-sec demo video (only what we built) (C)
+- [ ] Repo public + all 3 members added (C)
+- [ ] README + honesty line (mock vs real) (C)
+- [ ] Re-check against banned / anti-project list (C)
+- [ ] Demo link / APK accessible (C)
